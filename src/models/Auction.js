@@ -1,6 +1,5 @@
 // src/models/Auction.js
-
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const auctionSchema = new mongoose.Schema({
   name: {
@@ -248,12 +247,12 @@ auctionSchema.methods.start = async function(adminId) {
   if (this.status !== 'upcoming') {
     throw new Error('Auction cannot be started');
   }
-  
+
   this.status = 'ongoing';
   this.startedBy = adminId;
   this.currentCategoryIndex = 0;
   this.currentCategory = this.categoryFlow[0];
-  
+
   return this.save();
 };
 
@@ -262,7 +261,7 @@ auctionSchema.methods.pause = async function(adminId) {
   if (this.status !== 'ongoing') {
     throw new Error('Only ongoing auctions can be paused');
   }
-  
+
   // Save current state
   this.pauseState = {
     playerId: this.currentPlayerId,
@@ -271,12 +270,12 @@ auctionSchema.methods.pause = async function(adminId) {
     timerRemaining: this.timerRemaining,
     pausedAt: new Date()
   };
-  
+
   this.status = 'paused';
   this.pausedBy = adminId;
   this.timerStartedAt = null;
   this.timerEndsAt = null;
-  
+
   return this.save();
 };
 
@@ -285,15 +284,15 @@ auctionSchema.methods.resume = async function(adminId) {
   if (this.status !== 'paused') {
     throw new Error('Only paused auctions can be resumed');
   }
-  
+
   this.status = 'ongoing';
   this.startedBy = adminId;
-  
+
   // Restore state if needed
   if (this.pauseState.timerRemaining > 0) {
     this.startTimer(this.pauseState.timerRemaining);
   }
-  
+
   return this.save();
 };
 
@@ -304,7 +303,7 @@ auctionSchema.methods.complete = async function(adminId) {
   this.endTime = new Date();
   this.timerStartedAt = null;
   this.timerEndsAt = null;
-  
+
   return this.save();
 };
 
@@ -313,7 +312,7 @@ auctionSchema.methods.startTimer = function(duration = null) {
   const timerDuration = duration || this.timerDuration;
   this.timerStartedAt = new Date();
   this.timerEndsAt = new Date(Date.now() + (timerDuration * 1000));
-  
+
   return this.save();
 };
 
@@ -327,22 +326,22 @@ auctionSchema.methods.restartTimer = function(reduction = 0) {
 auctionSchema.methods.stopTimer = function() {
   this.timerStartedAt = null;
   this.timerEndsAt = null;
-  
+
   return this.save();
 };
 
 // Method to move to next player
 auctionSchema.methods.moveToNextPlayer = async function() {
-  const Player = require('./Player');
-  
+  const { default: Player } = await import('./Player.js');
+
   const currentCategoryPlayers = await Player.find({
     category: this.currentCategory,
     status: 'available',
     isActive: true
   }).sort({ name: 1 });
-  
+
   this.currentPlayerIndex += 1;
-  
+
   if (this.currentPlayerIndex >= currentCategoryPlayers.length) {
     // Move to next category
     return this.moveToNextCategory();
@@ -357,32 +356,32 @@ auctionSchema.methods.moveToNextPlayer = async function() {
 auctionSchema.methods.moveToNextCategory = async function() {
   this.currentCategoryIndex += 1;
   this.currentPlayerIndex = 0;
-  
+
   if (this.currentCategoryIndex >= this.categoryFlow.length) {
     // Auction completed
     return this.complete(this.startedBy);
   } else {
     // Set next category
     this.currentCategory = this.categoryFlow[this.currentCategoryIndex];
-    
-    const Player = require('./Player');
+
+    const { default: Player } = await import('./Player.js');
     const nextCategoryPlayers = await Player.find({
       category: this.currentCategory,
       status: 'available',
       isActive: true
     }).sort({ name: 1 });
-    
+
     if (nextCategoryPlayers.length > 0) {
       this.currentPlayerId = nextCategoryPlayers[0]._id;
     }
-    
+
     // Start break if configured
     if (this.breakDuration > 0) {
       this.onBreak = true;
       this.breakStartedAt = new Date();
       this.breakEndsAt = new Date(Date.now() + (this.breakDuration * 1000));
     }
-    
+
     return this.save();
   }
 };
@@ -392,11 +391,11 @@ auctionSchema.methods.addParticipant = async function(userId) {
   if (!this.participants.includes(userId)) {
     this.participants.push(userId);
   }
-  
+
   if (!this.activeParticipants.includes(userId)) {
     this.activeParticipants.push(userId);
   }
-  
+
   return this.save();
 };
 
@@ -409,7 +408,7 @@ auctionSchema.methods.removeParticipant = async function(userId) {
 // Method to get current state
 auctionSchema.methods.getCurrentState = async function() {
   await this.populate('currentPlayerId');
-  
+
   return {
     auction: this,
     currentPlayer: this.currentPlayerId,
@@ -434,4 +433,4 @@ auctionSchema.statics.getCompleted = function() {
   return this.find({ status: 'completed' }).sort({ endTime: -1 });
 };
 
-module.exports = mongoose.model('Auction', auctionSchema);
+export default mongoose.model('Auction', auctionSchema);

@@ -1,10 +1,10 @@
 // src/config/database.js
 
-const mongoose = require('mongoose');
-const { logger } = require('../utils/logger');
+import mongoose from 'mongoose';
+import { logger } from '../utils/logger.js';
 
 // Database connection configuration
-const connectDB = async () => {
+export const connectDB = async () => {
   try {
     const conn = await mongoose.connect(process.env.MONGO_URI, {
       // Mongoose 6+ no longer needs these options, but keeping for compatibility
@@ -47,7 +47,7 @@ const connectDB = async () => {
 };
 
 // Database health check
-const checkDBHealth = async () => {
+export const checkDBHealth = async () => {
   try {
     const state = mongoose.connection.readyState;
     const states = {
@@ -75,9 +75,9 @@ const checkDBHealth = async () => {
 };
 
 // Initialize default data
-const initializeDefaultData = async () => {
+export const initializeDefaultData = async () => {
   try {
-    const Settings = require('../models/Settings');
+    const { default: Settings } = await import('../models/Settings.js');
 
     // Initialize settings if they don't exist
     const settings = await Settings.getSettings();
@@ -90,7 +90,7 @@ const initializeDefaultData = async () => {
   }
 };
 
-module.exports = {
+export default {
   connectDB,
   checkDBHealth,
   initializeDefaultData

@@ -1,10 +1,8 @@
 // src/services/broadcastService.js
 
-// Business logic for managing broadcast messages and notifications
-
 import Broadcast from '../models/Broadcast.js';
 import User from '../models/User.js';
-import logger from '../utils/logger.js';
+import { logger } from '../utils/logger.js';
 import { paginate } from '../utils/database.js';
 import { sanitizeInput } from '../utils/helpers.js';
 
@@ -14,16 +12,13 @@ class BroadcastService {
     try {
       const { message, type = 'general', priority = 'normal', createdBy } = broadcastData;
 
-      // Validate input
-      if (!message || message.trim().length === 0) {
+      if (!message?.trim()) {
         throw new Error('Broadcast message is required');
       }
-
       if (message.length > 1000) {
         throw new Error('Broadcast message is too long (max 1000 characters)');
       }
 
-      // Sanitize message
       const sanitizedMessage = sanitizeInput(message);
 
       const broadcast = new Broadcast({
@@ -32,24 +27,19 @@ class BroadcastService {
         priority,
         createdBy,
         isActive: true,
-        deliveryStats: {
-          sent: 0,
-          delivered: 0,
-          failed: 0
-        }
+        deliveryStats: { sent: 0, delivered: 0, failed: 0 }
       });
 
-      const savedBroadcast = await broadcast.save();
-
+      const saved = await broadcast.save();
       logger.info('Broadcast created', {
-        broadcastId: savedBroadcast._id,
-        type: savedBroadcast.type,
-        priority: savedBroadcast.priority,
-        createdBy: createdBy,
+        broadcastId: saved._id,
+        type: saved.type,
+        priority: saved.priority,
+        createdBy,
         messageLength: sanitizedMessage.length
       });
+      return saved;
 
-      return savedBroadcast;
     } catch (error) {
       logger.error('Error creating broadcast:', error);
       throw error;
@@ -60,15 +50,9 @@ class BroadcastService {
   async getAllBroadcasts(page = 1, limit = 20, type = 'all', isActive = null) {
     try {
       const { skip, limit: pageLimit } = paginate(page, limit);
-      
-      // Build filter
       const filter = {};
-      if (type !== 'all') {
-        filter.type = type;
-      }
-      if (isActive !== null) {
-        filter.isActive = isActive;
-      }
+      if (type !== 'all') filter.type = type;
+      if (isActive !== null) filter.isActive = isActive;
 
       const [broadcasts, total] = await Promise.all([
         Broadcast.find(filter)
@@ -82,9 +66,9 @@ class BroadcastService {
       return {
         broadcasts,
         pagination: {
-          current: parseInt(page),
-          total: Math.ceil(total / pageLimit),
-          count: total,
+          current: parseInt(page, 10),
+          total:   Math.ceil(total / pageLimit),
+          count:   total,
           hasNext: skip + pageLimit < total,
           hasPrev: page > 1
         }
@@ -98,10 +82,11 @@ class BroadcastService {
   // Get recent active broadcasts for users
   async getRecentBroadcasts(limit = 10, types = ['general', 'announcement']) {
     try {
+      const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
       const broadcasts = await Broadcast.find({
-        isActive: true,
-        type: { $in: types },
-        createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } // Last 7 days
+        isActive:  true,
+        type:      { $in: types },
+        createdAt: { $gte: since }
       })
         .populate('createdBy', 'name username')
         .sort({ priority: -1, createdAt: -1 })
@@ -114,16 +99,12 @@ class BroadcastService {
     }
   }
 
-  // Get broadcast by ID
+  // Get single broadcast by ID
   async getBroadcastById(broadcastId) {
     try {
       const broadcast = await Broadcast.findById(broadcastId)
         .populate('createdBy', 'name username role');
-
-      if (!broadcast) {
-        throw new Error('Broadcast not found');
-      }
-
+      if (!broadcast) throw new Error('Broadcast not found');
       return broadcast;
     } catch (error) {
       logger.error('Error fetching broadcast:', error);
@@ -134,25 +115,19 @@ class BroadcastService {
   // Update broadcast
   async updateBroadcast(broadcastId, updateData) {
     try {
-      const allowedUpdates = ['message', 'type', 'priority', 'isActive'];
+      const allowed = ['message','type','priority','isActive'];
       const updates = {};
 
-      // Filter only allowed updates
-      Object.keys(updateData).forEach(key => {
-        if (allowedUpdates.includes(key)) {
-          if (key === 'message') {
-            updates[key] = sanitizeInput(updateData[key]);
-          } else {
-            updates[key] = updateData[key];
-          }
+      for (const key of Object.keys(updateData)) {
+        if (allowed.includes(key)) {
+          updates[key] = key === 'message'
+            ? sanitizeInput(updateData[key])
+            : updateData[key];
         }
-      });
-
-      if (Object.keys(updates).length === 0) {
+      }
+      if (!Object.keys(updates).length) {
         throw new Error('No valid updates provided');
       }
-
-      // Validate message length if updating message
       if (updates.message && updates.message.length > 1000) {
         throw new Error('Broadcast message is too long (max 1000 characters)');
       }
@@ -163,16 +138,10 @@ class BroadcastService {
         { new: true, runValidators: true }
       ).populate('createdBy', 'name username');
 
-      if (!broadcast) {
-        throw new Error('Broadcast not found');
-      }
-
-      logger.info('Broadcast updated', {
-        broadcastId,
-        updates: Object.keys(updates)
-      });
-
+      if (!broadcast) throw new Error('Broadcast not found');
+      logger.info('Broadcast updated', { broadcastId, updates: Object.keys(updates) });
       return broadcast;
+
     } catch (error) {
       logger.error('Error updating broadcast:', error);
       throw error;
@@ -183,17 +152,12 @@ class BroadcastService {
   async deleteBroadcast(broadcastId) {
     try {
       const broadcast = await Broadcast.findByIdAndDelete(broadcastId);
-      
-      if (!broadcast) {
-        throw new Error('Broadcast not found');
-      }
-
+      if (!broadcast) throw new Error('Broadcast not found');
       logger.info('Broadcast deleted', {
         broadcastId,
-        type: broadcast.type,
+        type:      broadcast.type,
         createdAt: broadcast.createdAt
       });
-
       return broadcast;
     } catch (error) {
       logger.error('Error deleting broadcast:', error);
@@ -201,7 +165,7 @@ class BroadcastService {
     }
   }
 
-  // Deactivate broadcast (soft delete)
+  // Soft-delete (deactivate) broadcast
   async deactivateBroadcast(broadcastId) {
     try {
       const broadcast = await Broadcast.findByIdAndUpdate(
@@ -209,16 +173,8 @@ class BroadcastService {
         { isActive: false },
         { new: true }
       );
-
-      if (!broadcast) {
-        throw new Error('Broadcast not found');
-      }
-
-      logger.info('Broadcast deactivated', {
-        broadcastId,
-        type: broadcast.type
-      });
-
+      if (!broadcast) throw new Error('Broadcast not found');
+      logger.info('Broadcast deactivated', { broadcastId, type: broadcast.type });
       return broadcast;
     } catch (error) {
       logger.error('Error deactivating broadcast:', error);
@@ -230,10 +186,9 @@ class BroadcastService {
   async getBroadcastsByType(type, page = 1, limit = 20) {
     try {
       const { skip, limit: pageLimit } = paginate(page, limit);
-      
       const [broadcasts, total] = await Promise.all([
         Broadcast.find({ type, isActive: true })
-          .populate('createdBy', 'name username')
+          .populate('createdBy','name username')
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(pageLimit),
@@ -243,9 +198,9 @@ class BroadcastService {
       return {
         broadcasts,
         pagination: {
-          current: parseInt(page),
-          total: Math.ceil(total / pageLimit),
-          count: total,
+          current: parseInt(page, 10),
+          total:   Math.ceil(total / pageLimit),
+          count:   total,
           hasNext: skip + pageLimit < total,
           hasPrev: page > 1
         }
@@ -256,21 +211,16 @@ class BroadcastService {
     }
   }
 
-  // Mark broadcast as read for a user (for future user-specific tracking)
+  // Mark broadcast as read
   async markBroadcastAsRead(broadcastId, userId) {
     try {
       const broadcast = await Broadcast.findById(broadcastId);
-      if (!broadcast) {
-        throw new Error('Broadcast not found');
-      }
-
-      // Add user to readBy array if not already present
+      if (!broadcast) throw new Error('Broadcast not found');
       if (!broadcast.readBy.includes(userId)) {
         broadcast.readBy.push(userId);
         broadcast.deliveryStats.delivered += 1;
         await broadcast.save();
       }
-
       return { success: true, message: 'Broadcast marked as read' };
     } catch (error) {
       logger.error('Error marking broadcast as read:', error);
@@ -281,12 +231,13 @@ class BroadcastService {
   // Get unread broadcasts for a user
   async getUnreadBroadcasts(userId, limit = 20) {
     try {
+      const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
       const broadcasts = await Broadcast.find({
-        isActive: true,
-        readBy: { $ne: userId },
-        createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } // Last 30 days
+        isActive:  true,
+        readBy:    { $ne: userId },
+        createdAt: { $gte: cutoff }
       })
-        .populate('createdBy', 'name username')
+        .populate('createdBy','name username')
         .sort({ priority: -1, createdAt: -1 })
         .limit(limit);
 
@@ -297,14 +248,14 @@ class BroadcastService {
     }
   }
 
-  // Get broadcast statistics
+  // Broadcast statistics
   async getBroadcastStats() {
     try {
       const [
         totalBroadcasts,
         activeBroadcasts,
-        broadcastsByType,
-        recentBroadcasts
+        byType,
+        recent24hCount
       ] = await Promise.all([
         Broadcast.countDocuments(),
         Broadcast.countDocuments({ isActive: true }),
@@ -317,35 +268,30 @@ class BroadcastService {
         })
       ]);
 
-      // Calculate delivery stats
       const deliveryStats = await Broadcast.aggregate([
         {
           $group: {
             _id: null,
-            totalSent: { $sum: '$deliveryStats.sent' },
+            totalSent:      { $sum: '$deliveryStats.sent' },
             totalDelivered: { $sum: '$deliveryStats.delivered' },
-            totalFailed: { $sum: '$deliveryStats.failed' }
+            totalFailed:    { $sum: '$deliveryStats.failed' }
           }
         }
       ]);
-
       const delivery = deliveryStats[0] || { totalSent: 0, totalDelivered: 0, totalFailed: 0 };
 
       return {
-        total: totalBroadcasts,
-        active: activeBroadcasts,
-        inactive: totalBroadcasts - activeBroadcasts,
-        recent24h: recentBroadcasts,
-        byType: broadcastsByType.reduce((acc, item) => {
-          acc[item._id] = item.count;
-          return acc;
-        }, {}),
+        total:          totalBroadcasts,
+        active:         activeBroadcasts,
+        inactive:       totalBroadcasts - activeBroadcasts,
+        recent24h:      recent24hCount,
+        byType:         byType.reduce((acc, b) => { acc[b._id] = b.count; return acc; }, {}),
         delivery: {
-          sent: delivery.totalSent,
-          delivered: delivery.totalDelivered,
-          failed: delivery.totalFailed,
-          deliveryRate: delivery.totalSent > 0 
-            ? Math.round((delivery.totalDelivered / delivery.totalSent) * 100) 
+          sent:         delivery.totalSent,
+          delivered:    delivery.totalDelivered,
+          failed:       delivery.totalFailed,
+          deliveryRate: delivery.totalSent
+            ? Math.round((delivery.totalDelivered / delivery.totalSent) * 100)
             : 0
         }
       };
@@ -355,120 +301,95 @@ class BroadcastService {
     }
   }
 
-  // Clean up old broadcasts (for maintenance)
+  // Clean up old broadcasts
   async cleanupOldBroadcasts(daysOld = 90) {
     try {
-      const cutoffDate = new Date(Date.now() - daysOld * 24 * 60 * 60 * 1000);
-      
-      const result = await Broadcast.deleteMany({
-        isActive: false,
-        createdAt: { $lt: cutoffDate }
-      });
-
+      const cutoff = new Date(Date.now() - daysOld * 24 * 60 * 60 * 1000);
+      const result = await Broadcast.deleteMany({ isActive: false, createdAt: { $lt: cutoff } });
       logger.info('Old broadcasts cleaned up', {
         deletedCount: result.deletedCount,
-        cutoffDate
+        cutoffDate:   cutoff
       });
-
-      return {
-        deletedCount: result.deletedCount,
-        cutoffDate
-      };
+      return { deletedCount: result.deletedCount, cutoffDate: cutoff };
     } catch (error) {
       logger.error('Error cleaning up old broadcasts:', error);
       throw new Error('Failed to cleanup old broadcasts');
     }
   }
 
-  // Create system broadcast (for automated messages)
+  // System broadcast creation
   async createSystemBroadcast(message, type = 'system', priority = 'high') {
     try {
+      const sanitized = sanitizeInput(message);
       const broadcast = new Broadcast({
-        message: sanitizeInput(message),
+        message:       sanitized,
         type,
         priority,
-        isSystem: true,
-        isActive: true,
-        deliveryStats: {
-          sent: 0,
-          delivered: 0,
-          failed: 0
-        }
+        isSystem:      true,
+        isActive:      true,
+        deliveryStats: { sent: 0, delivered: 0, failed: 0 }
       });
-
-      const savedBroadcast = await broadcast.save();
-
+      const saved = await broadcast.save();
       logger.info('System broadcast created', {
-        broadcastId: savedBroadcast._id,
+        broadcastId: saved._id,
         type,
         priority,
         messageLength: message.length
       });
-
-      return savedBroadcast;
+      return saved;
     } catch (error) {
       logger.error('Error creating system broadcast:', error);
       throw error;
     }
   }
 
-  // Get broadcast templates (for common messages)
+  // Templates and templated creation
   getBroadcastTemplates() {
     return {
       auction_start: {
-        type: 'auction',
+        type:     'auction',
         priority: 'high',
-        message: 'Auction "{auctionName}" is starting now! Join the bidding!'
+        message:  'Auction "{auctionName}" is starting now! Join the bidding!'
       },
       auction_end: {
-        type: 'auction',
+        type:     'auction',
         priority: 'normal',
-        message: 'Auction "{auctionName}" has ended. Check the results!'
+        message:  'Auction "{auctionName}" has ended. Check the results!'
       },
       maintenance: {
-        type: 'system',
+        type:     'system',
         priority: 'high',
-        message: 'System maintenance scheduled. The platform will be unavailable from {startTime} to {endTime}.'
+        message:  'System maintenance scheduled. The platform will be unavailable from {startTime} to {endTime}.'
       },
       welcome: {
-        type: 'general',
+        type:     'general',
         priority: 'normal',
-        message: 'Welcome to the Auction Platform! Your account has been approved.'
+        message:  'Welcome to the Auction Platform! Your account has been approved.'
       },
       player_sold: {
-        type: 'auction',
+        type:     'auction',
         priority: 'normal',
-        message: '{playerName} sold to {teamName} for {amount}!'
+        message:  '{playerName} sold to {teamName} for {amount}!'
       }
     };
   }
 
-  // Create broadcast from template
   async createBroadcastFromTemplate(templateKey, variables = {}, createdBy) {
     try {
       const templates = this.getBroadcastTemplates();
-      const template = templates[templateKey];
-
-      if (!template) {
-        throw new Error('Broadcast template not found');
-      }
+      const template  = templates[templateKey];
+      if (!template) throw new Error('Broadcast template not found');
 
       let message = template.message;
-      
-      // Replace variables in template
-      Object.keys(variables).forEach(key => {
-        const placeholder = `{${key}}`;
-        message = message.replace(new RegExp(placeholder, 'g'), variables[key]);
-      });
-
-      const broadcastData = {
+      for (const key of Object.keys(variables)) {
+        message = message.replace(new RegExp(`{${key}}`, 'g'), variables[key]);
+      }
+      return this.createBroadcast({
         message,
-        type: template.type,
-        priority: template.priority,
+        type:       template.type,
+        priority:   template.priority,
         createdBy
-      };
-
-      return await this.createBroadcast(broadcastData);
+      });
     } catch (error) {
       logger.error('Error creating broadcast from template:', error);
       throw error;

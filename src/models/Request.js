@@ -1,7 +1,6 @@
 // src/models/Request.js
-
-const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
+import mongoose from 'mongoose';
+import bcrypt from 'bcrypt';
 
 const requestSchema = new mongoose.Schema({
   name: {
@@ -32,14 +31,12 @@ const requestSchema = new mongoose.Schema({
     required: [true, 'Registration code is required'],
     select: false
   },
-  // Request status
   status: {
     type: String,
     enum: ['pending', 'approved', 'rejected'],
     default: 'pending',
     index: true
   },
-  // Admin actions
   reviewedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -53,7 +50,6 @@ const requestSchema = new mongoose.Schema({
     type: String,
     maxlength: [500, 'Review notes cannot exceed 500 characters']
   },
-  // Assigned details (when approved)
   assignedTeamName: {
     type: String,
     trim: true,
@@ -69,7 +65,6 @@ const requestSchema = new mongoose.Schema({
     enum: ['manager', 'admin'],
     default: 'manager'
   },
-  // Contact information (optional)
   email: {
     type: String,
     trim: true,
@@ -80,7 +75,6 @@ const requestSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
-  // Additional metadata
   registrationIP: {
     type: String,
     default: null
@@ -94,10 +88,9 @@ const requestSchema = new mongoose.Schema({
     enum: ['web', 'mobile', 'api'],
     default: 'web'
   },
-  // Auto-expire settings
   expiresAt: {
     type: Date,
-    default: () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+    default: () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days ahead
     index: { expireAfterSeconds: 0 }
   }
 }, {
@@ -109,176 +102,87 @@ requestSchema.index({ status: 1, createdAt: -1 });
 requestSchema.index({ username: 1 });
 requestSchema.index({ reviewedBy: 1 });
 
-// Hash password before saving
+// Pre-save hook: hash password
 requestSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next();
-  
   try {
     const salt = await bcrypt.genSalt(12);
     this.password = await bcrypt.hash(this.password, salt);
     next();
-  } catch (error) {
-    next(error);
+  } catch (err) {
+    next(err);
   }
 });
 
-// Method to approve request
+// Virtuals
+requestSchema.virtual('ageInDays').get(function() {
+  const diff = Date.now() - this.createdAt.getTime();
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+});
+requestSchema.virtual('daysUntilExpiry').get(function() {
+  if (!this.expiresAt) return null;
+  const diff = this.expiresAt.getTime() - Date.now();
+  return diff <= 0 ? 0 : Math.ceil(diff / (1000 * 60 * 60 * 24));
+});
+
+// Instance methods
 requestSchema.methods.approve = async function(adminId, assignmentData = {}) {
   if (this.status !== 'pending') {
     throw new Error('Only pending requests can be approved');
   }
-  
-  // Check if username is still available
-  const User = require('./User');
-  const existingUser = await User.findOne({ username: this.username });
-  if (existingUser) {
-    throw new Error('Username is no longer available');
-  }
-  
-  // Create the user account
-  const Settings = require('./Settings');
+  // Check username availability
+  const { default: User } = await import('./User.js');
+  const existing = await User.findOne({ username: this.username });
+  if (existing) throw new Error('Username is no longer available');
+
+  // Create user
+  const { default: Settings } = await import('./Settings.js');
   const settings = await Settings.getSettings();
-  
   const userData = {
     name: this.name,
     username: this.username,
     password: this.password,
-    role: assignmentData.role || this.assignedRole || 'manager',
-    teamName: assignmentData.teamName || this.assignedTeamName || `${this.name}'s Team`,
+    role: assignmentData.role || this.assignedRole,
+    teamName: assignmentData.teamName || this.assignedTeamName,
     balance: assignmentData.balance || this.assignedBalance || settings.baseBudget,
     isActive: true
   };
-  
   const newUser = await User.create(userData);
-  
-  // Update request status
+
+  // Update request
   this.status = 'approved';
   this.reviewedBy = adminId;
   this.reviewedAt = new Date();
   this.assignedTeamName = userData.teamName;
   this.assignedBalance = userData.balance;
   this.assignedRole = userData.role;
-  
   await this.save();
-  
-  return {
-    request: this,
-    user: newUser
-  };
+
+  return { request: this, user: newUser };
 };
 
-// Method to reject request
 requestSchema.methods.reject = async function(adminId, reason = null) {
   if (this.status !== 'pending') {
     throw new Error('Only pending requests can be rejected');
   }
-  
   this.status = 'rejected';
   this.reviewedBy = adminId;
   this.reviewedAt = new Date();
-  
-  if (reason) {
-    this.reviewNotes = reason;
-  }
-  
+  if (reason) this.reviewNotes = reason;
   return this.save();
 };
 
-// Method to validate registration code
-requestSchema.methods.validateCode = async function() {
-  const expectedCode = process.env.REGISTRATION_CODE;
-  if (!expectedCode) {
-    throw new Error('Registration code not configured');
-  }
-  
-  return this.code === expectedCode;
+requestSchema.methods.validateCode = function() {
+  const expected = process.env.REGISTRATION_CODE;
+  if (!expected) throw new Error('Registration code not configured');
+  return this.code === expected;
 };
 
-// Static method to get pending requests
-requestSchema.statics.getPendingRequests = function(limit = 50) {
-  return this.find({ status: 'pending' })
-    .select('-password -code')
-    .sort({ createdAt: -1 })
-    .limit(limit);
-};
-
-// Static method to get requests by status
-requestSchema.statics.getRequestsByStatus = function(status, limit = 50) {
-  return this.find({ status })
-    .populate('reviewedBy', 'name username')
-    .select('-password -code')
-    .sort({ createdAt: -1 })
-    .limit(limit);
-};
-
-// Static method to clean up expired requests
-requestSchema.statics.cleanupExpired = async function() {
-  const result = await this.deleteMany({
-    status: 'pending',
-    expiresAt: { $lte: new Date() }
-  });
-  
-  return result.deletedCount;
-};
-
-// Static method to get registration statistics
-requestSchema.statics.getStats = function() {
-  return this.aggregate([
-    {
-      $group: {
-        _id: '$status',
-        count: { $sum: 1 }
-      }
-    },
-    {
-      $group: {
-        _id: null,
-        total: { $sum: '$count' },
-        breakdown: {
-          $push: {
-            status: '$_id',
-            count: '$count'
-          }
-        }
-      }
-    }
-  ]);
-};
-
-// Static method to check if username is already requested
-requestSchema.statics.isUsernameRequested = function(username) {
-  return this.findOne({ 
-    username: username.toLowerCase(),
-    status: 'pending'
-  });
-};
-
-// Virtual for request age
-requestSchema.virtual('ageInDays').get(function() {
-  const now = new Date();
-  const diffTime = Math.abs(now - this.createdAt);
-  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-});
-
-// Virtual for time until expiry
-requestSchema.virtual('daysUntilExpiry').get(function() {
-  if (!this.expiresAt) return null;
-  
-  const now = new Date();
-  const diffTime = this.expiresAt - now;
-  
-  if (diffTime <= 0) return 0;
-  
-  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-});
-
-// Method to extend expiry
 requestSchema.methods.extendExpiry = function(days = 7) {
-  this.expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+  this.expiresAt = new Date(this.expiresAt.getTime() + days * 24 * 60 * 60 * 1000);
   return this.save();
 };
 
-// Method to get request summary
 requestSchema.methods.getSummary = function() {
   return {
     id: this._id,
@@ -296,7 +200,43 @@ requestSchema.methods.getSummary = function() {
   };
 };
 
-// Pre-remove middleware to prevent deletion of approved requests
+// Static methods
+requestSchema.statics.getPendingRequests = function(limit = 50) {
+  return this.find({ status: 'pending' })
+    .select('-password -code')
+    .sort({ createdAt: -1 })
+    .limit(limit);
+};
+
+requestSchema.statics.getRequestsByStatus = function(status, limit = 50) {
+  return this.find({ status })
+    .populate('reviewedBy', 'name username')
+    .select('-password -code')
+    .sort({ createdAt: -1 })
+    .limit(limit);
+};
+
+requestSchema.statics.cleanupExpired = function() {
+  return this.deleteMany({ status: 'pending', expiresAt: { $lte: new Date() } })
+    .then(res => res.deletedCount);
+};
+
+requestSchema.statics.getStats = function() {
+  return this.aggregate([
+    { $group: { _id: '$status', count: { $sum: 1 } } },
+    { $group: {
+        _id: null,
+        total: { $sum: '$count' },
+        breakdown: { $push: { status: '$_id', count: '$count' } }
+    }}
+  ]);
+};
+
+requestSchema.statics.isUsernameRequested = function(username) {
+  return this.findOne({ username: username.toLowerCase(), status: 'pending' });
+};
+
+// Prevent deletion of approved requests
 requestSchema.pre('remove', function(next) {
   if (this.status === 'approved') {
     return next(new Error('Cannot delete approved registration requests'));
@@ -304,4 +244,4 @@ requestSchema.pre('remove', function(next) {
   next();
 });
 
-module.exports = mongoose.model('Request', requestSchema);
+export default mongoose.model('Request', requestSchema);

@@ -1,19 +1,19 @@
 // src/controllers/adminController.js
 
-const { validationResult } = require('express-validator');
-const User = require('../models/User');
-const Player = require('../models/Player');
-const Auction = require('../models/Auction');
-const Request = require('../models/Request');
-const Settings = require('../models/Settings');
-const Broadcast = require('../models/Broadcast');
-const imageService = require('../services/imageService');
-const { logger } = require('../utils/logger');
+import { validationResult } from 'express-validator';
+import User from '../models/User.js';
+import Player from '../models/Player.js';
+import Auction from '../models/Auction.js';
+import Request from '../models/Request.js';
+import Settings from '../models/Settings.js';
+import Broadcast from '../models/Broadcast.js';
+import imageService from '../services/imageService.js';
+import { logger } from '../utils/logger.js';
 
 // Registration Requests Management
 
 // Get all registration requests
-exports.getRequests = async (req, res, next) => {
+export const getRequests = async (req, res, next) => {
   try {
     const { page = 1, limit = 20, status = 'pending' } = req.query;
     const offset = (page - 1) * limit;
@@ -48,7 +48,7 @@ exports.getRequests = async (req, res, next) => {
 };
 
 // Approve registration request
-exports.approveRequest = async (req, res, next) => {
+export const approveRequest = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { teamName, balance, role = 'manager' } = req.body;
@@ -102,7 +102,7 @@ exports.approveRequest = async (req, res, next) => {
 };
 
 // Reject registration request
-exports.rejectRequest = async (req, res, next) => {
+export const rejectRequest = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { reason } = req.body;
@@ -143,7 +143,7 @@ exports.rejectRequest = async (req, res, next) => {
 // Manager Management
 
 // Get all managers
-exports.getAllManagers = async (req, res, next) => {
+export const getAllManagers = async (req, res, next) => {
   try {
     const { page = 1, limit = 20, search } = req.query;
     const offset = (page - 1) * limit;
@@ -202,7 +202,7 @@ exports.getAllManagers = async (req, res, next) => {
 };
 
 // Get single manager details
-exports.getManager = async (req, res, next) => {
+export const getManager = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -241,7 +241,7 @@ exports.getManager = async (req, res, next) => {
 };
 
 // Update manager details
-exports.updateManager = async (req, res, next) => {
+export const updateManager = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { name, teamName, balance, isActive } = req.body;
@@ -287,7 +287,7 @@ exports.updateManager = async (req, res, next) => {
 // Player Management
 
 // Get all players
-exports.getAllPlayers = async (req, res, next) => {
+export const getAllPlayers = async (req, res, next) => {
   try {
     const { page = 1, limit = 50, category, status, search } = req.query;
     const offset = (page - 1) * limit;
@@ -330,7 +330,7 @@ exports.getAllPlayers = async (req, res, next) => {
 };
 
 // Create new player
-exports.createPlayer = async (req, res, next) => {
+export const createPlayer = async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -379,7 +379,7 @@ exports.createPlayer = async (req, res, next) => {
 };
 
 // Update player
-exports.updatePlayer = async (req, res, next) => {
+export const updatePlayer = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { name, category, baseValue, description, position, nationality, age, rating, isActive } = req.body;
@@ -426,7 +426,7 @@ exports.updatePlayer = async (req, res, next) => {
 };
 
 // Delete player
-exports.deletePlayer = async (req, res, next) => {
+export const deletePlayer = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -461,7 +461,7 @@ exports.deletePlayer = async (req, res, next) => {
 };
 
 // Bulk operations for players
-exports.bulkUpdatePlayers = async (req, res, next) => {
+export const bulkUpdatePlayers = async (req, res, next) => {
   try {
     const { action, playerIds, category } = req.body;
 
@@ -537,7 +537,7 @@ exports.bulkUpdatePlayers = async (req, res, next) => {
 // Auction Management
 
 // Create new auction
-exports.createAuction = async (req, res, next) => {
+export const createAuction = async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -593,7 +593,7 @@ exports.createAuction = async (req, res, next) => {
 // Settings Management
 
 // Get application settings
-exports.getSettings = async (req, res, next) => {
+export const getSettings = async (req, res, next) => {
   try {
     const settings = await Settings.getSettings();
 
@@ -609,7 +609,7 @@ exports.getSettings = async (req, res, next) => {
 };
 
 // Update application settings
-exports.updateSettings = async (req, res, next) => {
+export const updateSettings = async (req, res, next) => {
   try {
     const updates = req.body;
     const adminId = req.user._id;
@@ -633,7 +633,7 @@ exports.updateSettings = async (req, res, next) => {
 // Broadcast Management
 
 // Get all broadcasts
-exports.getAllBroadcasts = async (req, res, next) => {
+export const getAllBroadcasts = async (req, res, next) => {
   try {
     const { page = 1, limit = 20, status, type } = req.query;
     const offset = (page - 1) * limit;
@@ -671,7 +671,7 @@ exports.getAllBroadcasts = async (req, res, next) => {
 };
 
 // Create and send broadcast
-exports.createBroadcast = async (req, res, next) => {
+export const createBroadcast = async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -731,7 +731,7 @@ exports.createBroadcast = async (req, res, next) => {
 };
 
 // Delete broadcast
-exports.deleteBroadcast = async (req, res, next) => {
+export const deleteBroadcast = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -759,7 +759,7 @@ exports.deleteBroadcast = async (req, res, next) => {
 };
 
 // Get admin dashboard statistics
-exports.getDashboardStats = async (req, res, next) => {
+export const getDashboardStats = async (req, res, next) => {
   try {
     const [
       totalManagers,
@@ -811,3 +811,5 @@ exports.getDashboardStats = async (req, res, next) => {
     next(error);
   }
 };
+
+export default { getRequests, approveRequest, rejectRequest, getAllManagers, getManager, updateManager, getAllPlayers, createPlayer, updatePlayer, deletePlayer, bulkUpdatePlayers, createAuction, getSettings, updateSettings, getAllBroadcasts, createBroadcast, deleteBroadcast, getDashboardStats };

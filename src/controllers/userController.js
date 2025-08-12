@@ -1,14 +1,14 @@
 // src/controllers/userController.js
 
-const { validationResult } = require('express-validator');
-const User = require('../models/User');
-const Player = require('../models/Player');
-const Broadcast = require('../models/Broadcast');
-const imageService = require('../services/imageService');
-const { logger } = require('../utils/logger');
+import { validationResult } from 'express-validator';
+import User from '../models/User.js';
+import Player from '../models/Player.js';
+import Broadcast from '../models/Broadcast.js';
+import imageService from '../services/imageService.js';
+import { logger } from '../utils/logger.js';
 
 // Get current user profile
-exports.getProfile = async (req, res, next) => {
+export const getProfile = async (req, res, next) => {
   try {
     const user = await User.findById(req.user._id).select('-password');
 
@@ -47,7 +47,7 @@ exports.getProfile = async (req, res, next) => {
 };
 
 // Update user profile
-exports.updateProfile = async (req, res, next) => {
+export const updateProfile = async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -84,7 +84,7 @@ exports.updateProfile = async (req, res, next) => {
 };
 
 // Upload avatar
-exports.uploadAvatar = async (req, res, next) => {
+export const uploadAvatar = async (req, res, next) => {
   try {
     if (!req.file) {
       return res.status(400).json({
@@ -120,7 +120,7 @@ exports.uploadAvatar = async (req, res, next) => {
 };
 
 // Get user's team
-exports.getTeam = async (req, res, next) => {
+export const getTeam = async (req, res, next) => {
   try {
     const players = await Player.find({ 
       soldTo: req.user._id,
@@ -167,7 +167,7 @@ exports.getTeam = async (req, res, next) => {
 };
 
 // Get all managers (public view)
-exports.getAllManagers = async (req, res, next) => {
+export const getAllManagers = async (req, res, next) => {
   try {
     const { page = 1, limit = 20, search, sortBy = 'points' } = req.query;
     const skip = (page - 1) * limit;
@@ -244,7 +244,7 @@ exports.getAllManagers = async (req, res, next) => {
 };
 
 // Get single manager details (public view)
-exports.getManager = async (req, res, next) => {
+export const getManager = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -306,7 +306,7 @@ exports.getManager = async (req, res, next) => {
 };
 
 // Get user notifications
-exports.getNotifications = async (req, res, next) => {
+export const getNotifications = async (req, res, next) => {
   try {
     const { page = 1, limit = 20 } = req.query;
     const skip = (page - 1) * limit;
@@ -345,7 +345,7 @@ exports.getNotifications = async (req, res, next) => {
 };
 
 // Mark notification as read
-exports.markNotificationRead = async (req, res, next) => {
+export const markNotificationRead = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -372,10 +372,10 @@ exports.markNotificationRead = async (req, res, next) => {
 };
 
 // Get user achievements
-exports.getAchievements = async (req, res, next) => {
+export const getAchievements = async (req, res, next) => {
   try {
     const user = await User.findById(req.user._id).select('achievements points bidCount auctionsWon');
-    const settings = await require('../models/Settings').getSettings();
+    const settings = await import('../models/Settings.js').getSettings();
 
     // Get available achievements from settings
     const availableAchievements = settings.achievements.map(achievement => {
@@ -426,3 +426,5 @@ function calculateAchievementProgress(achievement, user) {
       return 0;
   }
 }
+
+export default { getProfile, updateProfile, uploadAvatar, getTeam, getAllManagers, getManager, getNotifications, markNotificationRead, getAchievements };

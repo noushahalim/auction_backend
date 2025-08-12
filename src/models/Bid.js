@@ -1,6 +1,6 @@
 // src/models/Bid.js
 
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const bidSchema = new mongoose.Schema({
   auction: {
@@ -34,7 +34,6 @@ const bidSchema = new mongoose.Schema({
     type: Number,
     default: 1
   },
-  // Bid timing
   placedAt: {
     type: Date,
     default: Date.now,
@@ -42,9 +41,8 @@ const bidSchema = new mongoose.Schema({
   },
   timerRemaining: {
     type: Number,
-    default: null // seconds remaining when bid was placed
+    default: null
   },
-  // Bid status
   isWinning: {
     type: Boolean,
     default: false
@@ -53,17 +51,15 @@ const bidSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
-  // Additional metadata
   bidSequence: {
     type: Number,
-    required: true // sequence number for this player
+    required: true
   },
   category: {
     type: String,
     enum: ['GK', 'DEF', 'MID', 'ATT'],
     required: true
   },
-  // Source tracking
   source: {
     type: String,
     enum: ['web', 'socket', 'auto'],
@@ -77,13 +73,12 @@ const bidSchema = new mongoose.Schema({
     type: String,
     default: null
   },
-  // Processing info
   processedAt: {
     type: Date,
     default: null
   },
   processingTime: {
-    type: Number, // milliseconds
+    type: Number,
     default: null
   }
 }, {
@@ -104,16 +99,10 @@ bidSchema.virtual('displayAmount').get(function() {
 
 // Method to mark as winning bid
 bidSchema.methods.markAsWinning = async function() {
-  // First, mark all other bids for this player as not winning
   await this.constructor.updateMany(
-    { 
-      player: this.player,
-      _id: { $ne: this._id }
-    },
+    { player: this.player, _id: { $ne: this._id } },
     { isWinning: false }
   );
-  
-  // Mark this bid as winning
   this.isWinning = true;
   return this.save();
 };
@@ -123,11 +112,10 @@ bidSchema.methods.invalidate = async function(reason = 'manual') {
   this.isValid = false;
   this.invalidationReason = reason;
   this.invalidatedAt = new Date();
-  
   return this.save();
 };
 
-// Static method to get bid history for a player
+// Static: get bid history for a player
 bidSchema.statics.getPlayerBidHistory = function(playerId, limit = 50) {
   return this.find({ player: playerId })
     .populate('bidder', 'name username')
@@ -135,7 +123,7 @@ bidSchema.statics.getPlayerBidHistory = function(playerId, limit = 50) {
     .limit(limit);
 };
 
-// Static method to get user's bid history
+// Static: get user's bid history
 bidSchema.statics.getUserBidHistory = function(userId, limit = 100) {
   return this.find({ bidder: userId })
     .populate('player', 'name category')
@@ -144,61 +132,46 @@ bidSchema.statics.getUserBidHistory = function(userId, limit = 100) {
     .limit(limit);
 };
 
-// Static method to get auction bid statistics
+// Static: auction statistics
 bidSchema.statics.getAuctionStats = function(auctionId) {
   return this.aggregate([
     { $match: { auction: mongoose.Types.ObjectId(auctionId) } },
-    {
-      $group: {
+    { $group: {
         _id: null,
         totalBids: { $sum: 1 },
         totalValue: { $sum: '$amount' },
         averageBid: { $avg: '$amount' },
         highestBid: { $max: '$amount' },
         uniqueBidders: { $addToSet: '$bidder' }
-      }
-    },
-    {
-      $project: {
+    }},
+    { $project: {
         _id: 0,
         totalBids: 1,
         totalValue: 1,
         averageBid: { $round: ['$averageBid', 2] },
         highestBid: 1,
         uniqueBiddersCount: { $size: '$uniqueBidders' }
-      }
-    }
+    }}
   ]);
 };
 
-// Static method to get top bidders
+// Static: top bidders
 bidSchema.statics.getTopBidders = function(auctionId = null, limit = 10) {
-  const matchStage = auctionId ? 
-    { auction: mongoose.Types.ObjectId(auctionId) } : 
-    {};
-    
+  const match = auctionId ? { auction: mongoose.Types.ObjectId(auctionId) } : {};
   return this.aggregate([
-    { $match: matchStage },
-    {
-      $group: {
+    { $match: match },
+    { $group: {
         _id: '$bidder',
         totalBids: { $sum: 1 },
         totalAmount: { $sum: '$amount' },
         averageBid: { $avg: '$amount' },
         highestBid: { $max: '$amount' }
-      }
-    },
-    {
-      $lookup: {
-        from: 'users',
-        localField: '_id',
-        foreignField: '_id',
-        as: 'user'
-      }
-    },
+    }},
+    { $lookup: {
+        from: 'users', localField: '_id', foreignField: '_id', as: 'user'
+    }},
     { $unwind: '$user' },
-    {
-      $project: {
+    { $project: {
         _id: 1,
         name: '$user.name',
         username: '$user.username',
@@ -206,14 +179,13 @@ bidSchema.statics.getTopBidders = function(auctionId = null, limit = 10) {
         totalAmount: 1,
         averageBid: { $round: ['$averageBid', 2] },
         highestBid: 1
-      }
-    },
-    { $sort: { totalBids: -1, totalAmount: -1 } },
+    }},
+    { $sort: { totalBids: -1, totalAmount: -1 }},
     { $limit: limit }
   ]);
 };
 
-// Static method to get bid timeline
+// Static: bid timeline
 bidSchema.statics.getBidTimeline = function(playerId) {
   return this.find({ player: playerId })
     .populate('bidder', 'name username avatarUrl')
@@ -221,77 +193,45 @@ bidSchema.statics.getBidTimeline = function(playerId) {
     .sort({ placedAt: 1 });
 };
 
-// Static method to get rapid bidding analysis
+// Static: rapid bidding analysis
 bidSchema.statics.getRapidBiddingAnalysis = function(auctionId, timeWindow = 30) {
-  const cutoffTime = new Date(Date.now() - (timeWindow * 1000));
-  
+  const cutoff = new Date(Date.now() - timeWindow * 1000);
   return this.aggregate([
-    {
-      $match: {
-        auction: mongoose.Types.ObjectId(auctionId),
-        placedAt: { $gte: cutoffTime }
-      }
-    },
-    {
-      $group: {
-        _id: {
-          player: '$player',
-          minute: {
-            $dateToString: {
-              format: '%Y-%m-%d %H:%M',
-              date: '$placedAt'
-            }
-          }
-        },
+    { $match: { auction: mongoose.Types.ObjectId(auctionId), placedAt: { $gte: cutoff } }},
+    { $group: {
+        _id: { player: '$player', minute: { $dateToString: { format: '%Y-%m-%d %H:%M', date: '$placedAt' } } },
         bidCount: { $sum: 1 },
         bids: { $push: '$$ROOT' }
-      }
-    },
-    { $sort: { bidCount: -1 } }
+    }},
+    { $sort: { bidCount: -1 }}
   ]);
 };
 
-// Pre-save middleware to set sequence number
+// Pre-save middleware: sequence and increments
 bidSchema.pre('save', async function(next) {
   if (this.isNew) {
     try {
-      // Get the last sequence number for this player
-      const lastBid = await this.constructor
-        .findOne({ player: this.player })
-        .sort({ bidSequence: -1 });
-      
-      this.bidSequence = lastBid ? lastBid.bidSequence + 1 : 1;
-      
-      // Calculate increment
-      if (lastBid) {
-        this.increment = this.amount - lastBid.amount;
-        this.previousBid = lastBid.amount;
-      } else {
-        this.increment = this.amount;
-        this.previousBid = 0;
-      }
-      
+      const last = await this.constructor.findOne({ player: this.player }).sort({ bidSequence: -1 });
+      this.bidSequence = last ? last.bidSequence + 1 : 1;
+      this.increment = last ? this.amount - last.amount : this.amount;
+      this.previousBid = last ? last.amount : 0;
       next();
-    } catch (error) {
-      next(error);
-    }
-  } else {
-    next();
-  }
+    } catch (err) { next(err); }
+  } else next();
 });
 
-// Post-save middleware to update player's current bid
+// Post-save middleware: update player stats
 bidSchema.post('save', async function(doc) {
   try {
-    const Player = require('./Player');
+    const Player = await import('./Player.js').then(m => m.default);
     await Player.findByIdAndUpdate(doc.player, {
       currentBid: doc.amount,
       currentBidder: doc.bidder,
       $inc: { totalBids: 1 }
     });
-  } catch (error) {
-    console.error('Error updating player after bid save:', error);
+  } catch (err) {
+    console.error('Error updating player after bid save:', err);
   }
 });
 
-module.exports = mongoose.model('Bid', bidSchema);
+export default mongoose.model('Bid', bidSchema);

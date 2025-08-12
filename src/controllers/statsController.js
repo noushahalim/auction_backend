@@ -1,12 +1,12 @@
 // src/controllers/statsController.js
 
-const User = require('../models/User');
-const Player = require('../models/Player');
-const Auction = require('../models/Auction');
-const { logger } = require('../utils/logger');
+import User from '../models/User.js';
+import Player from '../models/Player.js';
+import Auction from '../models/Auction.js';
+import { logger } from '../utils/logger.js';
 
 // Get leaderboards
-exports.getLeaderboards = async (req, res, next) => {
+export const getLeaderboards = async (req, res, next) => {
   try {
     const { limit = 10 } = req.query;
 
@@ -108,7 +108,7 @@ exports.getLeaderboards = async (req, res, next) => {
 };
 
 // Get overall statistics
-exports.getOverallStats = async (req, res, next) => {
+export const getOverallStats = async (req, res, next) => {
   try {
     // Basic counts
     const totalManagers = await User.countDocuments({ role: 'manager', isActive: true });
@@ -247,7 +247,7 @@ exports.getOverallStats = async (req, res, next) => {
 };
 
 // Get auction statistics
-exports.getAuctionStats = async (req, res, next) => {
+export const getAuctionStats = async (req, res, next) => {
   try {
     const { auctionId } = req.params;
 
@@ -345,7 +345,7 @@ exports.getAuctionStats = async (req, res, next) => {
 };
 
 // Get manager statistics
-exports.getManagerStats = async (req, res, next) => {
+export const getManagerStats = async (req, res, next) => {
   try {
     const { managerId } = req.params;
 
@@ -458,3 +458,5 @@ exports.getManagerStats = async (req, res, next) => {
     next(error);
   }
 };
+
+export default { getLeaderboards, getOverallStats, getAuctionStats, getManagerStats };

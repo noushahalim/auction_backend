@@ -2,10 +2,10 @@
 
 // Business logic for managing user notifications and real-time alerts
 
-import User from '../models/User.js';
-import Broadcast from '../models/Broadcast.js';
-import logger from '../utils/logger.js';
-import { paginate } from '../utils/database.js';
+import User               from '../models/User.js';
+import Broadcast          from '../models/Broadcast.js';
+import { logger }         from '../utils/logger.js';
+import { paginate }       from '../utils/database.js';
 import { formatCurrency, generateCorrelationId } from '../utils/helpers.js';
 
 class NotificationService {

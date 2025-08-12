@@ -1,14 +1,14 @@
 // src/controllers/authController.js
 
-const { validationResult } = require('express-validator');
-const jwt = require('jsonwebtoken');
-const User = require('../models/User');
-const Request = require('../models/Request');
-const authService = require('../services/authService');
-const { logger } = require('../utils/logger');
+import { validationResult } from 'express-validator';
+import jwt from 'jsonwebtoken';
+import User from '../models/User.js';
+import Request from '../models/Request.js';
+import authService from '../services/authService.js';
+import { logger } from '../utils/logger.js';
 
 // Login user
-exports.login = async (req, res, next) => {
+export const login = async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -59,7 +59,7 @@ exports.login = async (req, res, next) => {
 };
 
 // Register new user (creates request for admin approval)
-exports.register = async (req, res, next) => {
+export const register = async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -140,7 +140,7 @@ exports.register = async (req, res, next) => {
 };
 
 // Refresh access token
-exports.refreshToken = async (req, res, next) => {
+export const refreshToken = async (req, res, next) => {
   try {
     const refreshToken = req.body.refreshToken || req.headers['x-refresh-token'];
 
@@ -177,7 +177,7 @@ exports.refreshToken = async (req, res, next) => {
 };
 
 // Logout user (client-side token removal)
-exports.logout = async (req, res, next) => {
+export const logout = async (req, res, next) => {
   try {
     const user = req.user;
 
@@ -195,7 +195,7 @@ exports.logout = async (req, res, next) => {
 };
 
 // Get current user info
-exports.getCurrentUser = async (req, res, next) => {
+export const getCurrentUser = async (req, res, next) => {
   try {
     const user = await User.findById(req.user._id).select('-password');
 
@@ -224,7 +224,7 @@ exports.getCurrentUser = async (req, res, next) => {
 };
 
 // Verify token validity
-exports.verifyToken = async (req, res, next) => {
+export const verifyToken = async (req, res, next) => {
   try {
     const token = req.headers.authorization?.replace('Bearer ', '');
 
@@ -259,7 +259,7 @@ exports.verifyToken = async (req, res, next) => {
 };
 
 // Change password
-exports.changePassword = async (req, res, next) => {
+export const changePassword = async (req, res, next) => {
   try {
     const { currentPassword, newPassword } = req.body;
     const userId = req.user._id;
@@ -314,7 +314,7 @@ exports.changePassword = async (req, res, next) => {
 };
 
 // Get registration request status
-exports.getRegistrationStatus = async (req, res, next) => {
+export const getRegistrationStatus = async (req, res, next) => {
   try {
     const { username } = req.params;
 
@@ -346,7 +346,7 @@ exports.getRegistrationStatus = async (req, res, next) => {
 };
 
 // Resend registration request (if expired)
-exports.resendRegistrationRequest = async (req, res, next) => {
+export const resendRegistrationRequest = async (req, res, next) => {
   try {
     const { username, code } = req.body;
 
@@ -392,3 +392,5 @@ exports.resendRegistrationRequest = async (req, res, next) => {
     next(error);
   }
 };
+
+export default { login, register, refreshToken, logout, getCurrentUser, verifyToken, changePassword, getRegistrationStatus, resendRegistrationRequest };

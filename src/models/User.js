@@ -1,7 +1,6 @@
 // src/models/User.js
-
-const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
+import mongoose from 'mongoose';
+import bcrypt from 'bcrypt';
 
 const userSchema = new mongoose.Schema({
   name: {
@@ -122,7 +121,7 @@ userSchema.index({ isActive: 1 });
 // Hash password before saving
 userSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next();
-  
+
   try {
     const salt = await bcrypt.genSalt(12);
     this.password = await bcrypt.hash(this.password, salt);
@@ -152,20 +151,20 @@ userSchema.methods.updateBalance = async function(amount, operation = 'subtract'
   } else if (operation === 'add') {
     this.balance += amount;
   }
-  
+
   return this.save();
 };
 
 // Add achievement method
 userSchema.methods.addAchievement = async function(achievementData) {
   const existingAchievement = this.achievements.find(a => a.id === achievementData.id);
-  
+
   if (!existingAchievement) {
     this.achievements.push(achievementData);
     this.points += achievementData.points || 0;
     return this.save();
   }
-  
+
   return this;
 };
 
@@ -183,14 +182,14 @@ userSchema.methods.incrementAuctionsWon = async function() {
 
 // Get user statistics
 userSchema.methods.getStatistics = async function() {
-  const Player = require('./Player');
-  
+  const { default: Player } = await import('./Player.js');
+
   const players = await Player.find({ soldTo: this._id, status: 'sold' });
   const playersByCategory = players.reduce((acc, player) => {
     acc[player.category] = (acc[player.category] || 0) + 1;
     return acc;
   }, {});
-  
+
   return {
     totalPlayers: players.length,
     totalSpent: this.totalSpent,
@@ -213,11 +212,11 @@ userSchema.statics.findActiveManagers = function() {
 userSchema.statics.getLeaderboard = function(sortBy = 'points', limit = 10) {
   const sortOptions = {};
   sortOptions[sortBy] = -1;
-  
+
   return this.find({ role: 'manager', isActive: true })
     .select('name username teamName points auctionsWon totalSpent avatarUrl')
     .sort(sortOptions)
     .limit(limit);
 };
 
-module.exports = mongoose.model('User', userSchema);
+export default mongoose.model('User', userSchema);

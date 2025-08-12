@@ -1,6 +1,5 @@
 // src/models/Player.js
-
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const playerSchema = new mongoose.Schema({
   name: {
@@ -26,13 +25,11 @@ const playerSchema = new mongoose.Schema({
     type: String,
     default: null
   },
-  // Current status
   status: {
     type: String,
     enum: ['available', 'sold', 'unsold'],
     default: 'available'
   },
-  // Sale information
   soldTo: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -52,7 +49,6 @@ const playerSchema = new mongoose.Schema({
     ref: 'Auction',
     default: null
   },
-  // Bidding information
   currentBid: {
     type: Number,
     default: 0
@@ -74,7 +70,6 @@ const playerSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
-  // Vote tracking for skip feature
   votes: {
     likes: [{
       userId: {
@@ -99,7 +94,6 @@ const playerSchema = new mongoose.Schema({
       }
     }]
   },
-  // Status flags
   isActive: {
     type: Boolean,
     default: true
@@ -113,7 +107,6 @@ const playerSchema = new mongoose.Schema({
     enum: ['admin_skip', 'unanimous_dislike', 'no_bids'],
     default: null
   },
-  // Additional metadata
   description: {
     type: String,
     maxlength: [500, 'Description cannot exceed 500 characters']
@@ -157,24 +150,19 @@ playerSchema.methods.placeBid = async function(userId, amount) {
   if (this.status !== 'available') {
     throw new Error('Player is not available for bidding');
   }
-  
   if (amount <= this.currentBid) {
     throw new Error('Bid amount must be higher than current bid');
   }
-  
   if (amount < this.baseValue) {
     throw new Error('Bid amount cannot be less than base value');
   }
-  
   this.currentBid = amount;
   this.currentBidder = userId;
   this.totalBids += 1;
-  
   if (!this.biddingStarted) {
     this.biddingStarted = true;
     this.biddingStartedAt = new Date();
   }
-  
   return this.save();
 };
 
@@ -185,7 +173,6 @@ playerSchema.methods.sellTo = async function(userId, finalPrice, auctionId) {
   this.soldPrice = finalPrice || this.currentBid;
   this.soldAt = new Date();
   this.auctionId = auctionId;
-  
   return this.save();
 };
 
@@ -195,7 +182,6 @@ playerSchema.methods.markUnsold = async function(reason = 'no_bids') {
   this.category = 'UNSOLD';
   this.isSkipped = true;
   this.skipReason = reason;
-  
   return this.save();
 };
 
@@ -214,27 +200,19 @@ playerSchema.methods.resetForAuction = async function(newCategory = null) {
   this.votes = { likes: [], dislikes: [] };
   this.isSkipped = false;
   this.skipReason = null;
-  
-  if (newCategory) {
-    this.category = newCategory;
-  }
-  
+  if (newCategory) this.category = newCategory;
   return this.save();
 };
 
 // Method to vote for player
 playerSchema.methods.votePlayer = async function(userId, voteType) {
-  // Remove any existing vote from this user
-  this.votes.likes = this.votes.likes.filter(vote => !vote.userId.equals(userId));
-  this.votes.dislikes = this.votes.dislikes.filter(vote => !vote.userId.equals(userId));
-  
-  // Add new vote
+  this.votes.likes = this.votes.likes.filter(v => !v.userId.equals(userId));
+  this.votes.dislikes = this.votes.dislikes.filter(v => !v.userId.equals(userId));
   if (voteType === 'like') {
     this.votes.likes.push({ userId, votedAt: new Date() });
   } else if (voteType === 'dislike') {
     this.votes.dislikes.push({ userId, votedAt: new Date() });
   }
-  
   return this.save();
 };
 
@@ -250,51 +228,36 @@ playerSchema.methods.getVoteSummary = function() {
 
 // Method to check if user has voted
 playerSchema.methods.hasUserVoted = function(userId) {
-  const hasLiked = this.votes.likes.some(vote => vote.userId.equals(userId));
-  const hasDisliked = this.votes.dislikes.some(vote => vote.userId.equals(userId));
-  
-  if (hasLiked) return 'like';
-  if (hasDisliked) return 'dislike';
+  if (this.votes.likes.some(v => v.userId.equals(userId))) return 'like';
+  if (this.votes.dislikes.some(v => v.userId.equals(userId))) return 'dislike';
   return null;
 };
 
 // Static methods
 playerSchema.statics.getAvailableByCategory = function(category) {
-  return this.find({
-    category: category,
-    status: 'available',
-    isActive: true
-  }).sort({ name: 1 });
+  return this.find({ category, status: 'available', isActive: true }).sort({ name: 1 });
 };
 
 playerSchema.statics.getPlayerStats = function() {
   return this.aggregate([
-    {
-      $group: {
+    { $group: {
         _id: '$status',
         count: { $sum: 1 },
         totalValue: { $sum: '$soldPrice' }
-      }
-    }
+    }}
   ]);
 };
 
 playerSchema.statics.getMostExpensiveByCategory = function() {
   return this.aggregate([
-    {
-      $match: { status: 'sold' }
-    },
-    {
-      $group: {
+    { $match: { status: 'sold' }},
+    { $group: {
         _id: '$category',
         maxPrice: { $max: '$soldPrice' },
         player: { $first: '$$ROOT' }
-      }
-    },
-    {
-      $sort: { maxPrice: -1 }
-    }
+    }},
+    { $sort: { maxPrice: -1 }}
   ]);
 };
 
-module.exports = mongoose.model('Player', playerSchema);
+export default mongoose.model('Player', playerSchema);

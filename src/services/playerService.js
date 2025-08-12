@@ -5,7 +5,7 @@
 import Player from '../models/Player.js';
 import User from '../models/User.js';
 import Settings from '../models/Settings.js';
-import logger from '../utils/logger.js';
+import { logger } from '../utils/logger.js';
 import { withTransaction, paginate } from '../utils/database.js';
 import { sanitizeInput, generateSlug } from '../utils/helpers.js';
 

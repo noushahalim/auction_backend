@@ -2,7 +2,7 @@
 
 // Handles Socket.IO events for admin operations during auctions
 
-import logger from '../utils/logger.js';
+import { logger } from '../utils/logger.js';
 import auctionService from '../services/auctionService.js';
 import playerService from '../services/playerService.js';
 import notificationService from '../services/notificationService.js';

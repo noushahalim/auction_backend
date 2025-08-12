@@ -1,9 +1,13 @@
 // src/services/userService.js
 
-const User = require('../models/User');
-const Player = require('../models/Player');
-const Broadcast = require('../models/Broadcast');
-const { logger } = require('../utils/logger');
+import User       from '../models/User.js';
+import Player     from '../models/Player.js';
+import Broadcast  from '../models/Broadcast.js';
+import Settings   from '../models/Settings.js';
+import Bid        from '../models/Bid.js';
+import Auction    from '../models/Auction.js';
+import imageService from './imageService.js';
+import { logger } from '../utils/logger.js';
 
 class UserService {
   // Get user profile with statistics
@@ -71,8 +75,6 @@ class UserService {
   // Upload user avatar
   async uploadUserAvatar(userId, imageBuffer, filename) {
     try {
-      const imageService = require('./imageService');
-      
       // Upload to Imgur
       const imageUrl = await imageService.uploadBuffer(imageBuffer, filename);
 
@@ -205,7 +207,6 @@ class UserService {
         throw new Error('User not found');
       }
 
-      const Settings = require('../models/Settings');
       const settings = await Settings.getSettings();
       const allAchievements = settings.achievements;
 
@@ -375,9 +376,6 @@ class UserService {
         throw new Error('User not found');
       }
 
-      const Bid = require('../models/Bid');
-      const Auction = require('../models/Auction');
-
       // Get recent bids
       const recentBids = await Bid.find({ bidder: userId })
         .populate('player', 'name category')
@@ -441,4 +439,4 @@ class UserService {
   }
 }
 
-module.exports = new UserService();
+export default new UserService();

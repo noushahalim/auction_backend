@@ -1,9 +1,6 @@
 // src/utils/database.js
-
-// Helper functions for database operations and data seeding
-
 import mongoose from 'mongoose';
-import logger from './logger.js';
+import { logger } from './logger.js';
 import User from '../models/User.js';
 import Settings from '../models/Settings.js';
 import Achievement from '../models/Achievement.js';
@@ -39,21 +36,21 @@ export const cleanDatabase = async (collections = []) => {
       throw new Error('Cannot clean database in production environment');
     }
     
-    const collectionsToClean = collections.length > 0 
-      ? collections 
+    const toClean = collections.length
+      ? collections
       : Object.keys(mongoose.connection.collections);
     
-    for (const collection of collectionsToClean) {
-      if (mongoose.connection.collections[collection]) {
-        await mongoose.connection.collections[collection].deleteMany({});
-        logger.info(`Cleaned collection: ${collection}`);
+    for (const name of toClean) {
+      const coll = mongoose.connection.collections[name];
+      if (coll) {
+        await coll.deleteMany({});
+        logger.info(`Cleaned collection: ${name}`);
       }
     }
-    
-    return { success: true, cleaned: collectionsToClean };
-  } catch (error) {
-    logger.error('Database cleaning failed:', error);
-    throw error;
+    return { success: true, cleaned: toClean };
+  } catch (err) {
+    logger.error('Database cleaning failed:', err);
+    throw err;
   }
 };
 
@@ -62,50 +59,36 @@ export const cleanDatabase = async (collections = []) => {
  */
 export const seedDefaultSettings = async () => {
   try {
-    const existingSettings = await Settings.findOne();
-    if (existingSettings) {
+    const existing = await Settings.findOne();
+    if (existing) {
       logger.info('Settings already exist, skipping seed');
-      return existingSettings;
+      return existing;
     }
-    
-    const defaultSettings = new Settings({
+
+    const s = new Settings({
       auction: {
         timer: parseInt(process.env.BID_TIMER) || 60,
         breakTimer: 10,
         mode: 'auto',
-        ruleTill: {
-          enabled: true,
-          value: 20
-        },
-        restartTimerAfterFirstBid: {
-          enabled: true,
-          reduction: 5
-        }
+        ruleTill: { enabled: true, value: 20 },
+        restartTimerAfterFirstBid: { enabled: true, reduction: 5 }
       },
       budget: {
         baseBudget: parseInt(process.env.BASE_BUDGET) || 200000000,
         currency: 'credits'
       },
-      baseValues: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-      categories: [
-        'GK', 'DEF', 'MID', 'FWD', 'UNSOLD'
-      ],
-      achievements: {
-        enabled: true,
-        pointsMultiplier: 1
-      },
-      notifications: {
-        enabled: true,
-        broadcastRetention: 30 // days
-      }
+      baseValues: [1,2,3,4,5,6,7,8,9,10],
+      categories: ['GK','DEF','MID','FWD','UNSOLD'],
+      achievements: { enabled: true, pointsMultiplier: 1 },
+      notifications: { enabled: true, broadcastRetention: 30 }
     });
-    
-    const savedSettings = await defaultSettings.save();
+
+    const saved = await s.save();
     logger.info('Default settings seeded successfully');
-    return savedSettings;
-  } catch (error) {
-    logger.error('Failed to seed default settings:', error);
-    throw error;
+    return saved;
+  } catch (err) {
+    logger.error('Failed to seed default settings:', err);
+    throw err;
   }
 };
 
@@ -114,20 +97,18 @@ export const seedDefaultSettings = async () => {
  */
 export const seedDefaultAchievements = async () => {
   try {
-    const existingCount = await Achievement.countDocuments();
-    if (existingCount > 0) {
+    const count = await Achievement.countDocuments();
+    if (count > 0) {
       logger.info('Achievements already exist, skipping seed');
       return;
     }
-    
-    const defaultAchievements = Achievement.getDefaultAchievements();
-    const achievements = await Achievement.insertMany(defaultAchievements);
-    
-    logger.info(`Seeded ${achievements.length} default achievements`);
-    return achievements;
-  } catch (error) {
-    logger.error('Failed to seed default achievements:', error);
-    throw error;
+    const defaults = Achievement.getDefaultAchievements();
+    const docs = await Achievement.insertMany(defaults);
+    logger.info(`Seeded ${docs.length} default achievements`);
+    return docs;
+  } catch (err) {
+    logger.error('Failed to seed default achievements:', err);
+    throw err;
   }
 };
 
@@ -136,36 +117,35 @@ export const seedDefaultAchievements = async () => {
  */
 export const createAdminUser = async () => {
   try {
-    const existingAdmin = await User.findOne({ role: 'admin' });
-    if (existingAdmin) {
+    const existing = await User.findOne({ role: 'admin' });
+    if (existing) {
       logger.info('Admin user already exists, skipping creation');
-      return existingAdmin;
+      return existing;
     }
-    
-    const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
-    const hashedPassword = await argon2.hash(adminPassword);
-    
-    const adminUser = new User({
+
+    const pwd = process.env.ADMIN_PASSWORD || 'admin123';
+    const hash = await argon2.hash(pwd);
+
+    const admin = new User({
       name: 'System Administrator',
       username: 'admin',
-      password: hashedPassword,
+      password: hash,
       role: 'admin',
-      balance: 0, // Admin doesn't participate in bidding
+      balance: 0,
       teamName: 'Admin',
       isActive: true,
       isApproved: true
     });
-    
-    const savedAdmin = await adminUser.save();
+
+    const saved = await admin.save();
     logger.info('Admin user created successfully', {
-      username: savedAdmin.username,
-      role: savedAdmin.role
+      username: saved.username,
+      role: saved.role
     });
-    
-    return savedAdmin;
-  } catch (error) {
-    logger.error('Failed to create admin user:', error);
-    throw error;
+    return saved;
+  } catch (err) {
+    logger.error('Failed to create admin user:', err);
+    throw err;
   }
 };
 
@@ -175,26 +155,23 @@ export const createAdminUser = async () => {
 export const initializeDatabase = async () => {
   try {
     logger.info('Initializing database with default data...');
-    
-    // Check database connection
-    const healthCheck = checkDatabaseHealth();
-    if (!healthCheck.isHealthy) {
-      throw new Error(`Database is not healthy: ${healthCheck.status}`);
+    const health = checkDatabaseHealth();
+    if (!health.isHealthy) {
+      throw new Error(`Database not healthy: ${health.status}`);
     }
-    
-    // Seed default data
+
     const [settings, achievements, admin] = await Promise.all([
       seedDefaultSettings(),
       seedDefaultAchievements(),
       createAdminUser()
     ]);
-    
-    logger.info('Database initialization completed successfully', {
+
+    logger.info('Database initialization completed', {
       settings: !!settings,
       achievements: achievements?.length || 0,
       admin: !!admin
     });
-    
+
     return {
       success: true,
       data: {
@@ -203,9 +180,9 @@ export const initializeDatabase = async () => {
         admin: admin?.username
       }
     };
-  } catch (error) {
-    logger.error('Database initialization failed:', error);
-    throw error;
+  } catch (err) {
+    logger.error('Database initialization failed:', err);
+    throw err;
   }
 };
 
@@ -214,15 +191,14 @@ export const initializeDatabase = async () => {
  */
 export const withTransaction = async (callback) => {
   const session = await mongoose.startSession();
-  
   try {
     session.startTransaction();
     const result = await callback(session);
     await session.commitTransaction();
     return result;
-  } catch (error) {
+  } catch (err) {
     await session.abortTransaction();
-    throw error;
+    throw err;
   } finally {
     session.endSession();
   }
@@ -232,27 +208,20 @@ export const withTransaction = async (callback) => {
  * Pagination helper
  */
 export const paginate = (page = 1, limit = 10) => {
-  const skip = (parseInt(page, 10) - 1) * parseInt(limit, 10);
-  return {
-    skip: Math.max(0, skip),
-    limit: Math.min(parseInt(limit, 10), 100) // Max 100 items per page
-  };
+  const p = parseInt(page, 10);
+  const l = parseInt(limit, 10);
+  const skip = (p - 1) * l;
+  return { skip: Math.max(0, skip), limit: Math.min(l, 100) };
 };
 
 /**
  * Build aggregation pipeline for complex queries
  */
-export const buildAggregationPipeline = (options = {}) => {
+export const buildAggregationPipeline = (opts = {}) => {
   const pipeline = [];
-  
-  // Match stage
-  if (options.match) {
-    pipeline.push({ $match: options.match });
-  }
-  
-  // Lookup stages for population
-  if (options.populate) {
-    options.populate.forEach(pop => {
+  if (opts.match)    pipeline.push({ $match: opts.match });
+  if (opts.populate) {
+    for (const pop of opts.populate) {
       pipeline.push({
         $lookup: {
           from: pop.from,
@@ -261,32 +230,13 @@ export const buildAggregationPipeline = (options = {}) => {
           as: pop.as
         }
       });
-      
-      if (pop.unwind) {
-        pipeline.push({ $unwind: pop.unwind });
-      }
-    });
+      if (pop.unwind) pipeline.push({ $unwind: pop.unwind });
+    }
   }
-  
-  // Sort stage
-  if (options.sort) {
-    pipeline.push({ $sort: options.sort });
-  }
-  
-  // Pagination
-  if (options.skip !== undefined) {
-    pipeline.push({ $skip: options.skip });
-  }
-  
-  if (options.limit !== undefined) {
-    pipeline.push({ $limit: options.limit });
-  }
-  
-  // Project stage
-  if (options.project) {
-    pipeline.push({ $project: options.project });
-  }
-  
+  if (opts.sort)   pipeline.push({ $sort: opts.sort });
+  if (opts.skip !== undefined)  pipeline.push({ $skip: opts.skip });
+  if (opts.limit !== undefined) pipeline.push({ $limit: opts.limit });
+  if (opts.project) pipeline.push({ $project: opts.project });
   return pipeline;
 };
 
@@ -295,26 +245,23 @@ export const buildAggregationPipeline = (options = {}) => {
  */
 export const createBackup = async (collections = []) => {
   if (process.env.NODE_ENV === 'production') {
-    throw new Error('Backup function not available in production');
+    throw new Error('Backup not available in production');
   }
-  
   try {
     const backup = {};
-    const collectionsToBackup = collections.length > 0 
-      ? collections 
+    const toBackup = collections.length
+      ? collections
       : Object.keys(mongoose.connection.collections);
-    
-    for (const collectionName of collectionsToBackup) {
-      const collection = mongoose.connection.collections[collectionName];
-      if (collection) {
-        backup[collectionName] = await collection.find({}).toArray();
+    for (const name of toBackup) {
+      const coll = mongoose.connection.collections[name];
+      if (coll) {
+        backup[name] = await coll.find({}).toArray();
       }
     }
-    
     return backup;
-  } catch (error) {
-    logger.error('Backup creation failed:', error);
-    throw error;
+  } catch (err) {
+    logger.error('Backup creation failed:', err);
+    throw err;
   }
 };
 

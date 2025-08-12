@@ -1,58 +1,62 @@
 {
-    "name": "auction-backend",
-    "version": "1.0.0",
-    "description": "Modern Auction Platform Backend with Node.js, Express, MongoDB and Socket.IO",
-    "main": "server.js",
-    "type": "module",
-    "engines": {
-      "node": ">=18.0.0"
-    },
-    "scripts": {
-      "start": "node server.js",
-      "dev": "nodemon server.js",
-      "test": "jest",
-      "test:watch": "jest --watch",
-      "lint": "eslint . --ext .js",
-      "lint:fix": "eslint . --ext .js --fix"
-    },
-    "dependencies": {
-      "express": "^5.1.0",
-      "socket.io": "^4.8.1",
-      "mongoose": "^8.9.5",
-      "jsonwebtoken": "^9.0.2",
-      "argon2": "^0.41.1",
-      "bcrypt": "^5.1.1",
-      "multer": "^2.0.0",
-      "winston": "^3.15.0",
-      "cors": "^2.8.5",
-      "helmet": "^8.0.0",
-      "express-rate-limit": "^7.4.1",
-      "express-validator": "^7.2.0",
-      "compression": "^1.7.5",
-      "dotenv": "^16.4.7",
-      "node-cron": "^3.0.3",
-      "joi": "^17.13.3",
-      "imgur": "^2.4.2",
-      "uuid": "^10.0.0",
-      "async-local-storage": "^2.3.1"
-    },
-    "devDependencies": {
-      "nodemon": "^3.1.7",
-      "jest": "^29.7.0",
-      "supertest": "^7.0.0",
-      "eslint": "^9.12.0",
-      "@types/node": "^22.7.5"
-    },
-    "keywords": [
-      "auction",
-      "nodejs",
-      "express",
-      "mongodb",
-      "socket.io",
-      "jwt",
-      "real-time",
-      "bidding"
-    ],
-    "author": "Your Name",
-    "license": "MIT"
-  }
+  "name": "auction-backend",
+  "version": "1.0.0",
+  "description": "Modern Auction Platform Backend with Node.js, Express, MongoDB and Socket.IO",
+  "main": "server.js",
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "lint": "eslint . --ext .js",
+    "lint:fix": "eslint . --ext .js --fix"
+  },
+  "dependencies": {
+    "argon2": "^0.41.1",
+    "async-local-storage": "^2.3.1",
+    "bcrypt": "^6.0.0",
+    "compression": "^1.7.5",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^5.1.0",
+    "express-rate-limit": "^7.4.1",
+    "express-validator": "^7.2.0",
+    "helmet": "^8.0.0",
+    "imgur": "^2.4.2",
+    "joi": "^17.13.3",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.9.5",
+    "morgan": "^1.10.1",
+    "multer": "^2.0.0",
+    "node-cron": "^3.0.3",
+    "socket.io": "^4.8.1",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1",
+    "uuid": "^10.0.0",
+    "winston": "^3.15.0",
+    "yamljs": "^0.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.5",
+    "eslint": "^9.12.0",
+    "jest": "^29.7.0",
+    "nodemon": "^3.1.7",
+    "supertest": "^7.0.0"
+  },
+  "keywords": [
+    "auction",
+    "nodejs",
+    "express",
+    "mongodb",
+    "socket.io",
+    "jwt",
+    "real-time",
+    "bidding"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}

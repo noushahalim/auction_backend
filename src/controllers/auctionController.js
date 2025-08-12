@@ -1,16 +1,16 @@
 // src/controllers/auctionController.js
 
-const { validationResult } = require('express-validator');
-const Auction = require('../models/Auction');
-const Player = require('../models/Player');
-const User = require('../models/User');
-const Bid = require('../models/Bid');
-const auctionService = require('../services/auctionService');
-const achievementService = require('../services/achievementService');
-const { logger } = require('../utils/logger');
+import { validationResult } from 'express-validator';
+import Auction from '../models/Auction.js';
+import Player from '../models/Player.js';
+import User from '../models/User.js';
+import Bid from '../models/Bid.js';
+import auctionService from '../services/auctionService.js';
+import achievementService from '../services/achievementService.js';
+import { logger } from '../utils/logger.js';
 
 // Get all auctions
-exports.getAllAuctions = async (req, res, next) => {
+export const getAllAuctions = async (req, res, next) => {
   try {
     const { page = 1, limit = 20, status } = req.query;
     const offset = (page - 1) * limit;
@@ -50,7 +50,7 @@ exports.getAllAuctions = async (req, res, next) => {
 };
 
 // Get single auction
-exports.getAuction = async (req, res, next) => {
+export const getAuction = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -86,7 +86,7 @@ exports.getAuction = async (req, res, next) => {
 };
 
 // Get auction current state (for real-time updates)
-exports.getAuctionState = async (req, res, next) => {
+export const getAuctionState = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -114,7 +114,7 @@ exports.getAuctionState = async (req, res, next) => {
 };
 
 // Place a bid in auction
-exports.placeBid = async (req, res, next) => {
+export const placeBid = async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -178,7 +178,7 @@ exports.placeBid = async (req, res, next) => {
 };
 
 // Vote for player (like/dislike for skip feature)
-exports.votePlayer = async (req, res, next) => {
+export const votePlayer = async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -283,7 +283,7 @@ exports.votePlayer = async (req, res, next) => {
 };
 
 // Get player vote status
-exports.getPlayerVotes = async (req, res, next) => {
+export const getPlayerVotes = async (req, res, next) => {
   try {
     const { auctionId, playerId } = req.params;
     const userId = req.user._id;
@@ -315,7 +315,7 @@ exports.getPlayerVotes = async (req, res, next) => {
 };
 
 // Get bid history for a player
-exports.getPlayerBidHistory = async (req, res, next) => {
+export const getPlayerBidHistory = async (req, res, next) => {
   try {
     const { playerId } = req.params;
     const { limit = 20 } = req.query;
@@ -337,7 +337,7 @@ exports.getPlayerBidHistory = async (req, res, next) => {
 };
 
 // Get user's bidding history
-exports.getUserBidHistory = async (req, res, next) => {
+export const getUserBidHistory = async (req, res, next) => {
   try {
     const userId = req.user._id;
     const { limit = 50, page = 1 } = req.query;
@@ -359,7 +359,7 @@ exports.getUserBidHistory = async (req, res, next) => {
 };
 
 // Admin auction control endpoints
-exports.startAuction = async (req, res, next) => {
+export const startAuction = async (req, res, next) => {
   try {
     const { auctionId } = req.params;
     const adminId = req.user._id;
@@ -397,7 +397,7 @@ exports.startAuction = async (req, res, next) => {
   }
 };
 
-exports.stopAuction = async (req, res, next) => {
+export const stopAuction = async (req, res, next) => {
   try {
     const { auctionId } = req.params;
     const adminId = req.user._id;
@@ -425,7 +425,7 @@ exports.stopAuction = async (req, res, next) => {
   }
 };
 
-exports.continueAuction = async (req, res, next) => {
+export const continueAuction = async (req, res, next) => {
   try {
     const { auctionId } = req.params;
     const adminId = req.user._id;
@@ -453,7 +453,7 @@ exports.continueAuction = async (req, res, next) => {
   }
 };
 
-exports.skipBid = async (req, res, next) => {
+export const skipBid = async (req, res, next) => {
   try {
     const { auctionId } = req.params;
     const { playerId } = req.body;
@@ -484,7 +484,7 @@ exports.skipBid = async (req, res, next) => {
   }
 };
 
-exports.finalCall = async (req, res, next) => {
+export const finalCall = async (req, res, next) => {
   try {
     const { auctionId } = req.params;
     const adminId = req.user._id;
@@ -514,7 +514,7 @@ exports.finalCall = async (req, res, next) => {
   }
 };
 
-exports.undoBid = async (req, res, next) => {
+export const undoBid = async (req, res, next) => {
   try {
     const { auctionId } = req.params;
     const adminId = req.user._id;
@@ -545,7 +545,7 @@ exports.undoBid = async (req, res, next) => {
 };
 
 // Get managers info for display during auction
-exports.getManagersInfo = async (req, res, next) => {
+export const getManagersInfo = async (req, res, next) => {
   try {
     const managers = await User.find({ role: 'manager', isActive: true })
       .select('name username balance')
@@ -565,7 +565,7 @@ exports.getManagersInfo = async (req, res, next) => {
 };
 
 // Get detailed manager info for display
-exports.getManagerDetails = async (req, res, next) => {
+export const getManagerDetails = async (req, res, next) => {
   try {
     const managers = await User.find({ role: 'manager', isActive: true })
       .select('name username balance totalSpent')
@@ -604,3 +604,5 @@ exports.getManagerDetails = async (req, res, next) => {
     next(error);
   }
 };
+
+export default { getAllAuctions, getAuction, getAuctionState, placeBid, votePlayer, getPlayerVotes, getPlayerBidHistory, getUserBidHistory, startAuction, stopAuction, continueAuction, skipBid, finalCall, undoBid, getManagersInfo, getManagerDetails };

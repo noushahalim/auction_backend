@@ -1,8 +1,7 @@
 // src/services/achievementService.js
-
-const User = require('../models/User');
-const Settings = require('../models/Settings');
-const { logger } = require('../utils/logger');
+import User from '../models/User.js';
+import Settings from '../models/Settings.js';
+import { logger } from '../utils/logger.js';
 
 class AchievementService {
   // Check achievements after a bid is placed
@@ -26,7 +25,7 @@ class AchievementService {
       }
 
       // High bid achievements
-      const highBidAchievements = achievements.filter(a => 
+      const highBidAchievements = achievements.filter(a =>
         a.criteria.type === 'high_bid' && bidAmount >= a.criteria.amount
       );
 
@@ -54,7 +53,7 @@ class AchievementService {
       }
 
       // Multiple wins achievement
-      const multiWinAchievements = achievements.filter(a => 
+      const multiWinAchievements = achievements.filter(a =>
         a.criteria.type === 'auction_wins' && user.auctionsWon >= a.criteria.count
       );
 
@@ -63,7 +62,7 @@ class AchievementService {
       }
 
       // High spending achievements for this specific win
-      const highSpendAchievements = achievements.filter(a => 
+      const highSpendAchievements = achievements.filter(a =>
         a.criteria.type === 'high_bid' && winPrice >= a.criteria.amount
       );
 
@@ -175,22 +174,16 @@ class AchievementService {
     switch (achievement.criteria.type) {
       case 'first_bid':
         return user.bidCount > 0 ? 100 : 0;
-
       case 'auction_win':
         return user.auctionsWon > 0 ? 100 : 0;
-
       case 'per_bid':
         // Show progress up to 100 bids for display purposes
         return Math.min(100, (user.bidCount / 100) * 100);
-
       case 'auction_wins':
         return Math.min(100, (user.auctionsWon / achievement.criteria.count) * 100);
-
       case 'high_bid':
-        // This would need to check user's highest bid from bid history
-        // For now, return 0 as placeholder
+        // Placeholder; implement as needed
         return 0;
-
       default:
         return 0;
     }
@@ -199,9 +192,9 @@ class AchievementService {
   // Get leaderboard based on points
   async getPointsLeaderboard(limit = 10) {
     try {
-      return await User.find({ 
-        role: 'manager', 
-        isActive: true 
+      return await User.find({
+        role: 'manager',
+        isActive: true
       })
       .select('name username teamName points avatarUrl achievements')
       .sort({ points: -1, name: 1 })
@@ -220,7 +213,7 @@ class AchievementService {
       const allUsers = await User.find({ role: 'manager', isActive: true });
 
       const stats = settings.achievements.map(achievement => {
-        const usersWithAchievement = allUsers.filter(user => 
+        const usersWithAchievement = allUsers.filter(user =>
           user.achievements.some(ua => ua.id === achievement.id)
         );
 
@@ -228,7 +221,9 @@ class AchievementService {
           id: achievement.id,
           name: achievement.name,
           totalEarned: usersWithAchievement.length,
-          percentage: allUsers.length > 0 ? (usersWithAchievement.length / allUsers.length) * 100 : 0
+          percentage: allUsers.length > 0
+            ? (usersWithAchievement.length / allUsers.length) * 100
+            : 0
         };
       });
 
@@ -267,4 +262,4 @@ class AchievementService {
   }
 }
 
-module.exports = new AchievementService();
+export default new AchievementService();

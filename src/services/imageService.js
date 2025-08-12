@@ -1,12 +1,12 @@
 // src/services/imageService.js
 
-const axios = require('axios');
-const { logger } = require('../utils/logger');
+import axios from 'axios';
+import { logger } from '../utils/logger.js';
 
 class ImageService {
   constructor() {
     this.imgurClientId = process.env.IMGUR_CLIENT_ID;
-    this.imgurApiUrl = 'https://api.imgur.com/3/upload';
+    this.imgurApiUrl   = 'https://api.imgur.com/3/upload';
   }
 
   // Upload image buffer to Imgur
@@ -15,53 +15,44 @@ class ImageService {
       if (!this.imgurClientId) {
         throw new Error('Imgur Client ID not configured');
       }
-
       if (!buffer || buffer.length === 0) {
         throw new Error('Invalid image buffer');
       }
 
-      // Convert buffer to base64
       const base64Image = buffer.toString('base64');
+      const response = await axios.post(
+        this.imgurApiUrl,
+        { image: base64Image, type: 'base64', name: filename, title: filename },
+        {
+          headers: {
+            Authorization: `Client-ID ${this.imgurClientId}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 30_000
+        }
+      );
 
-      const response = await axios.post(this.imgurApiUrl, {
-        image: base64Image,
-        type: 'base64',
-        name: filename,
-        title: filename
-      }, {
-        headers: {
-          'Authorization': `Client-ID ${this.imgurClientId}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 30000 // 30 second timeout
-      });
-
-      if (response.data && response.data.success && response.data.data) {
-        const imageUrl = response.data.data.link;
-
-        logger.info(`Image uploaded successfully to Imgur: ${imageUrl}`);
-
-        return imageUrl;
-      } else {
-        throw new Error('Failed to upload image to Imgur');
+      const data = response.data;
+      if (data.success && data.data?.link) {
+        logger.info(`Image uploaded successfully to Imgur: ${data.data.link}`);
+        return data.data.link;
       }
+      throw new Error('Failed to upload image to Imgur');
 
     } catch (error) {
       logger.error('Imgur upload error:', error.message);
-
       if (error.response) {
         logger.error('Imgur API response:', {
           status: error.response.status,
-          data: error.response.data
+          data:   error.response.data
         });
-
         if (error.response.status === 429) {
           throw new Error('Upload rate limit exceeded. Please try again later.');
-        } else if (error.response.status === 400) {
+        }
+        if (error.response.status === 400) {
           throw new Error('Invalid image format. Please upload a valid image file.');
         }
       }
-
       throw new Error('Failed to upload image. Please try again.');
     }
   }
@@ -72,31 +63,28 @@ class ImageService {
       if (!this.imgurClientId) {
         throw new Error('Imgur Client ID not configured');
       }
-
       if (!imageUrl || !this.isValidUrl(imageUrl)) {
         throw new Error('Invalid image URL');
       }
 
-      const response = await axios.post(this.imgurApiUrl, {
-        image: imageUrl,
-        type: 'url'
-      }, {
-        headers: {
-          'Authorization': `Client-ID ${this.imgurClientId}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 30000
-      });
+      const response = await axios.post(
+        this.imgurApiUrl,
+        { image: imageUrl, type: 'url' },
+        {
+          headers: {
+            Authorization: `Client-ID ${this.imgurClientId}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 30_000
+        }
+      );
 
-      if (response.data && response.data.success && response.data.data) {
-        const uploadedImageUrl = response.data.data.link;
-
-        logger.info(`Image uploaded from URL successfully to Imgur: ${uploadedImageUrl}`);
-
-        return uploadedImageUrl;
-      } else {
-        throw new Error('Failed to upload image from URL to Imgur');
+      const data = response.data;
+      if (data.success && data.data?.link) {
+        logger.info(`Image uploaded from URL to Imgur: ${data.data.link}`);
+        return data.data.link;
       }
+      throw new Error('Failed to upload image from URL to Imgur');
 
     } catch (error) {
       logger.error('Imgur URL upload error:', error.message);
@@ -106,21 +94,17 @@ class ImageService {
 
   // Validate file type and size
   validateImageFile(file) {
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-    const maxSize = 10 * 1024 * 1024; // 10MB
-
+    const allowed = ['image/jpeg','image/jpg','image/png','image/gif','image/webp'];
+    const maxSize = 10 * 1024 * 1024;
     if (!file) {
       throw new Error('No file provided');
     }
-
-    if (!allowedTypes.includes(file.mimetype)) {
-      throw new Error('Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed.');
+    if (!allowed.includes(file.mimetype)) {
+      throw new Error('Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed.');
     }
-
     if (file.size > maxSize) {
       throw new Error('File too large. Maximum size is 10MB.');
     }
-
     return true;
   }
 
@@ -130,19 +114,14 @@ class ImageService {
       if (!this.imgurClientId) {
         throw new Error('Imgur Client ID not configured');
       }
-
-      const response = await axios.get(`https://api.imgur.com/3/image/${imageId}`, {
-        headers: {
-          'Authorization': `Client-ID ${this.imgurClientId}`
-        }
-      });
-
-      if (response.data && response.data.success) {
+      const response = await axios.get(
+        `https://api.imgur.com/3/image/${imageId}`,
+        { headers: { Authorization: `Client-ID ${this.imgurClientId}` } }
+      );
+      if (response.data.success) {
         return response.data.data;
-      } else {
-        throw new Error('Failed to get image info');
       }
-
+      throw new Error('Failed to get image info');
     } catch (error) {
       logger.error('Get image info error:', error.message);
       throw new Error('Failed to get image information');
@@ -155,20 +134,15 @@ class ImageService {
       if (!this.imgurClientId) {
         throw new Error('Imgur Client ID not configured');
       }
-
-      const response = await axios.delete(`https://api.imgur.com/3/image/${imageId}`, {
-        headers: {
-          'Authorization': `Client-ID ${this.imgurClientId}`
-        }
-      });
-
-      if (response.data && response.data.success) {
+      const response = await axios.delete(
+        `https://api.imgur.com/3/image/${imageId}`,
+        { headers: { Authorization: `Client-ID ${this.imgurClientId}` } }
+      );
+      if (response.data.success) {
         logger.info(`Image deleted from Imgur: ${imageId}`);
         return true;
-      } else {
-        throw new Error('Failed to delete image');
       }
-
+      throw new Error('Failed to delete image');
     } catch (error) {
       logger.error('Delete image error:', error.message);
       throw new Error('Failed to delete image');
@@ -178,98 +152,61 @@ class ImageService {
   // Extract image ID from Imgur URL
   extractImageId(imgurUrl) {
     try {
-      const regex = /imgur\.com\/([a-zA-Z0-9]+)/;
-      const match = imgurUrl.match(regex);
-      return match ? match[1] : null;
-    } catch (error) {
+      const m = imgurUrl.match(/imgur\.com\/([a-zA-Z0-9]+)/);
+      return m ? m[1] : null;
+    } catch {
       return null;
     }
   }
 
   // Validate URL format
-  isValidUrl(string) {
+  isValidUrl(str) {
     try {
-      new URL(string);
+      new URL(str);
       return true;
-    } catch (_) {
+    } catch {
       return false;
     }
   }
 
-  // Generate thumbnail URL from Imgur URL
+  // Generate thumbnail URL
   generateThumbnail(imgurUrl, size = 'm') {
-    try {
-      // Imgur thumbnail sizes: s (90x90), b (160x160), t (160x160), m (320x320), l (640x640), h (1024x1024)
-      const imageId = this.extractImageId(imgurUrl);
-      if (!imageId) {
-        return imgurUrl; // Return original if can't extract ID
-      }
-
-      const extension = imgurUrl.split('.').pop();
-      return `https://i.imgur.com/${imageId}${size}.${extension}`;
-    } catch (error) {
-      return imgurUrl; // Return original URL if thumbnail generation fails
-    }
+    const id = this.extractImageId(imgurUrl);
+    if (!id) return imgurUrl;
+    const ext = imgurUrl.split('.').pop();
+    return `https://i.imgur.com/${id}${size}.${ext}`;
   }
 
-  // Batch upload multiple images
+  // Batch upload
   async uploadMultiple(buffers, filenames = []) {
-    try {
-      const uploadPromises = buffers.map((buffer, index) => 
-        this.uploadBuffer(buffer, filenames[index] || `upload_${index}`)
-      );
+    const results = await Promise.allSettled(
+      buffers.map((buf, i) => this.uploadBuffer(buf, filenames[i] || `upload_${i}`))
+    );
 
-      const results = await Promise.allSettled(uploadPromises);
-
-      const successful = [];
-      const failed = [];
-
-      results.forEach((result, index) => {
-        if (result.status === 'fulfilled') {
-          successful.push({
-            index,
-            url: result.value,
-            filename: filenames[index] || `upload_${index}`
-          });
-        } else {
-          failed.push({
-            index,
-            error: result.reason.message,
-            filename: filenames[index] || `upload_${index}`
-          });
-        }
-      });
-
-      return { successful, failed };
-
-    } catch (error) {
-      logger.error('Batch upload error:', error.message);
-      throw new Error('Batch upload failed');
-    }
+    const successful = [], failed = [];
+    results.forEach((r, i) => {
+      if (r.status === 'fulfilled') {
+        successful.push({ index: i, url: r.value, filename: filenames[i] });
+      } else {
+        failed.push({ index: i, error: r.reason.message, filename: filenames[i] });
+      }
+    });
+    return { successful, failed };
   }
 
-  // Check if Imgur service is available
+  // Service health check
   async checkServiceHealth() {
     try {
-      const response = await axios.get('https://api.imgur.com/3/credits', {
-        headers: {
-          'Authorization': `Client-ID ${this.imgurClientId}`
-        },
-        timeout: 5000
+      const resp = await axios.get('https://api.imgur.com/3/credits', {
+        headers: { Authorization: `Client-ID ${this.imgurClientId}` },
+        timeout: 5_000
       });
-
-      return {
-        available: true,
-        credits: response.data.data
-      };
+      return { available: true, credits: resp.data.data };
     } catch (error) {
       logger.error('Imgur service health check failed:', error.message);
-      return {
-        available: false,
-        error: error.message
-      };
+      return { available: false, error: error.message };
     }
   }
 }
 
-module.exports = new ImageService();
+export default new ImageService();

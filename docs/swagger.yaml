@@ -1,0 +1,1709 @@
+openapi: 3.0.3
+info:
+  title: Auction Platform API
+  version: "1.0.0"
+  description: |
+    REST API for Auction Platform.  
+    - **Auth**: login, registration, token refresh, logout, profile.  
+    - **Users**: profile, team, notifications, achievements.  
+    - **Auctions**: browse auctions, join, bid, vote.  
+    - **Managers**: public manager list & detail.  
+    - **Admin**: user requests, player & auction management, broadcasts, settings.  
+    - **Stats**: leaderboards & analytics.
+
+servers:
+  - url: /api
+    description: Default API server (relative path)
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Auth
+    description: Authentication & user session
+  - name: Users
+    description: User profile, team, notifications, achievements
+  - name: Auctions
+    description: Browse, join, bid, vote
+  - name: Managers
+    description: Public manager directory
+  - name: Admin
+    description: Admin operations (requires admin role)
+  - name: Stats
+    description: Leaderboards & statistics
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+          example: "Validation failed"
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+
+    Pagination:
+      type: object
+      properties:
+        currentPage: { type: integer, example: 1 }
+        totalPages:  { type: integer, example: 5 }
+        totalItems:  { type: integer, example: 100 }
+        hasNext:     { type: boolean, example: true }
+        hasPrev:     { type: boolean, example: false }
+
+    User:
+      type: object
+      properties:
+        _id:         { type: string }
+        name:        { type: string }
+        username:    { type: string }
+        role:        { type: string, enum: [admin,manager] }
+        isActive:    { type: boolean }
+        balance:     { type: integer }
+        teamName:    { type: string }
+        points:      { type: integer }
+        auctionsWon: { type: integer }
+        avatarUrl:   { type: string }
+
+    AuthTokens:
+      type: object
+      properties:
+        token:        { type: string }
+        refreshToken: { type: string }
+
+    Player:
+      type: object
+      properties:
+        _id:         { type: string }
+        name:        { type: string }
+        category:    { type: string }
+        baseValue:   { type: integer }
+        status:      { type: string, enum: [available,unsold,sold,disabled] }
+        soldPrice:   { type: integer, nullable: true }
+        imageUrl:    { type: string, nullable: true }
+
+    AuctionSummary:
+      type: object
+      properties:
+        _id:   { type: string }
+        name:  { type: string }
+        status:{ type: string, enum: [upcoming,ongoing,paused,completed] }
+        startTime:
+          type: string
+          format: date-time
+
+    AuctionState:
+      type: object
+      properties:
+        auction:
+          $ref: '#/components/schemas/AuctionSummary'
+        currentPlayer:
+          $ref: '#/components/schemas/Player'
+        currentBid:
+          type: integer
+        currentBidder:
+          $ref: '#/components/schemas/User'
+
+    Bid:
+      type: object
+      properties:
+        _id:
+          type: string
+        userId:
+          type: string
+        playerId:
+          type: string
+        amount:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+
+    Broadcast:
+      type: object
+      properties:
+        _id:        { type: string }
+        title:      { type: string }
+        message:    { type: string }
+        type:       { type: string }
+        priority:   { type: string }
+        status:     { type: string, enum: [draft,sent] }
+        sentAt:
+          type: string
+          format: date-time
+
+    Settings:
+      type: object
+      properties:
+        registrationCode: { type: string }
+        categories:       { type: array, items: { type: string } }
+        budget:
+          type: object
+          properties:
+            baseBudget: { type: integer }
+
+paths:
+
+  ### AUTH ###
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Authenticate user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username,password]
+              properties:
+                username: { type: string }
+                password: { type: string }
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Login successful" }
+                  data:
+                    $ref: '#/components/schemas/AuthTokens'
+        '400':
+          $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register (pending admin approval)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name,username,password,code]
+              properties:
+                name:     { type: string }
+                username: { type: string }
+                password: { type: string }
+                code:     { type: string }
+      responses:
+        '201':
+          description: Request created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Registration request submitted" }
+                  data:
+                    type: object
+                    properties:
+                      requestId: { type: string }
+                      username:  { type: string }
+                      status:    { type: string }
+        '400':
+          $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh access token
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '200':
+          description: New token returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+                  data:
+                    $ref: '#/components/schemas/AuthTokens'
+        '401':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout (client-side)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User profile & stats
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: '#/components/schemas/User'
+                      stats:
+                        type: object
+                        description: user-specific stats
+        '401':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/verify:
+    post:
+      tags: [Auth]
+      summary: Verify JWT validity
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Token valid
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:    { type: boolean }
+                  message:    { type: string }
+                  data:
+                    type: object
+                    properties:
+                      tokenValid: { type: boolean }
+                      user:       { $ref: '#/components/schemas/User' }
+        '401':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  ### USERS ###
+  /users/me:
+    get:
+      tags: [Users]
+      summary: Get your profile & stats
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Profile data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      user:    { $ref: '#/components/schemas/User' }
+                      players:
+                        type: array
+                        items: { $ref: '#/components/schemas/Player' }
+                      stats:
+                        type: object
+        '401':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /users/me:
+    put:
+      tags: [Users]
+      summary: Update your profile
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:     { type: string }
+                teamName:{ type: string }
+      responses:
+        '200':
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:    { $ref: '#/components/schemas/User' }
+        '400':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /users/me/avatar:
+    post:
+      tags: [Users]
+      summary: Upload avatar
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Avatar updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:   { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      avatarUrl: { type: string }
+                      user:      { $ref: '#/components/schemas/User' }
+        '400':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /users/me/team:
+    get:
+      tags: [Users]
+      summary: Get your team (players)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Team data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      players:
+                        type: array
+                        items: { $ref: '#/components/schemas/Player' }
+                      stats:
+                        type: object
+        '401':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /users/me/notifications:
+    get:
+      tags: [Users]
+      summary: Get your notifications
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20 }
+      responses:
+        '200':
+          description: Paginated notifications
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      notifications:
+                        type: array
+                        items: { $ref: '#/components/schemas/Broadcast' }
+                      unreadCount:
+                        type: integer
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+        '401':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /users/me/notifications/{id}/read:
+    put:
+      tags: [Users]
+      summary: Mark a notification read
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Marked as read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /users/me/achievements:
+    get:
+      tags: [Users]
+      summary: Get your achievements
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Achievement list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      achievements:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:        { type: string }
+                            name:      { type: string }
+                            points:    { type: integer }
+                            achieved:  { type: boolean }
+                            achievedAt:
+                              type: string
+                              format: date-time
+                            progress:  { type: integer }
+
+  ### MANAGERS (public) ###
+  /managers:
+    get:
+      tags: [Managers]
+      summary: List managers (public)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20 }
+        - in: query
+          name: search
+          schema: { type: string }
+        - in: query
+          name: sortBy
+          schema:
+            type: string
+            enum: [points,name,balance]
+            default: points
+      responses:
+        '200':
+          description: Paginated manager directory
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:{ type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      managers:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/User'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+        '401':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /managers/{id}:
+    get:
+      tags: [Managers]
+      summary: Get public manager detail
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Manager profile & players
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:{ type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      manager:
+                        $ref: '#/components/schemas/User'
+                      players:
+                        type: array
+                        items: { $ref: '#/components/schemas/Player' }
+                      stats:
+                        type: object
+        '404':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  ### AUCTIONS ###
+  /auctions:
+    get:
+      tags: [Auctions]
+      summary: List auctions
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20 }
+        - in: query
+          name: status
+          schema: { type: string }
+      responses:
+        '200':
+          description: Paginated auctions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:{ type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      auctions:
+                        type: array
+                        items: { $ref: '#/components/schemas/AuctionSummary' }
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+        '401':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /auctions/{id}:
+    get:
+      tags: [Auctions]
+      summary: Get auction & join
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Auction current state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:{ type: boolean }
+                  data:
+                    $ref: '#/components/schemas/AuctionState'
+        '404':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /auctions/{auctionId}/state:
+    get:
+      tags: [Auctions]
+      summary: Poll auction state (real-time updates)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: auctionId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Auction state snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:{ type: boolean }
+                  data:
+                    $ref: '#/components/schemas/AuctionState'
+        '404':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /auctions/{auctionId}/bid:
+    post:
+      tags: [Auctions]
+      summary: Place a bid
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: auctionId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount,playerId]
+              properties:
+                amount:   { type: integer }
+                playerId: { type: string }
+      responses:
+        '200':
+          description: Bid accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:{ type: boolean }
+                  message:{ type: string }
+                  data:
+                    type: object
+                    properties:
+                      bid:
+                        $ref: '#/components/schemas/Bid'
+        '400':
+          $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /auctions/{auctionId}/players/{playerId}/vote:
+    post:
+      tags: [Auctions]
+      summary: Vote to skip or celebrate player
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: auctionId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: playerId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [voteType]
+              properties:
+                voteType:
+                  type: string
+                  enum: [like,dislike]
+      responses:
+        '200':
+          description: Vote registered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:    { type: boolean }
+                  message:    { type: string }
+                  data:
+                    type: object
+                    properties:
+                      voteSummary:
+                        type: object
+                        properties:
+                          likes:    { type: integer }
+                          dislikes: { type: integer }
+                      skipTriggered: { type: boolean }
+                      skipReason:    { type: string, nullable: true }
+        '400':
+          $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /auctions/{auctionId}/players/{playerId}/votes:
+    get:
+      tags: [Auctions]
+      summary: Get vote counts & your vote
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: auctionId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: playerId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Vote status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:{ type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      voteSummary:
+                        type: object
+                        properties:
+                          likes:    { type: integer }
+                          dislikes: { type: integer }
+                      userVote:
+                        type: string
+                        enum: [like,dislike,null]
+        '404':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  ### ADMIN ###
+  /admin/requests:
+    get:
+      tags: [Admin]
+      summary: List registration requests
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20 }
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending,approved,rejected]
+            default: pending
+      responses:
+        '200':
+          description: Paginated requests
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:{ type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      requests:
+                        type: array
+                        items:
+                          type: object
+                          description: Registration request record
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+        '401':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/requests/{id}/approve:
+    post:
+      tags: [Admin]
+      summary: Approve a registration request
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                teamName: { type: string }
+                balance:  { type: integer }
+                role:     { type: string, default: "manager" }
+      responses:
+        '200':
+          description: Request approved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:{ type: boolean }
+                  message:{ type: string }
+                  data:
+                    type: object
+                    properties:
+                      request:
+                        type: object
+                        description: updated request
+                      user:
+                        $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/requests/{id}/reject:
+    post:
+      tags: [Admin]
+      summary: Reject a registration request
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string }
+      responses:
+        '200':
+          description: Request rejected
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:{ type: boolean }
+                  message:{ type: string }
+                  data:
+                    type: object
+                    description: updated request
+        '400':
+          $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/managers:
+    get:
+      tags: [Admin]
+      summary: List all managers
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20 }
+        - in: query
+          name: search
+          schema: { type: string }
+      responses:
+        '200':
+          description: Paginated managers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:{ type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      managers:
+                        type: array
+                        items: { $ref: '#/components/schemas/User' }
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+        '401':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/managers/{id}:
+    get:
+      tags: [Admin]
+      summary: Get a manager’s details
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Manager detail + players + stats
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:{ type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      manager:
+                        $ref: '#/components/schemas/User'
+                      players:
+                        type: array
+                        items: { $ref: '#/components/schemas/Player' }
+                      stats:
+                        type: object
+        '404':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/managers/{id}:
+    put:
+      tags: [Admin]
+      summary: Update manager
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:     { type: string }
+                teamName:{ type: string }
+                balance: { type: integer }
+                isActive:{ type: boolean }
+      responses:
+        '200':
+          description: Manager updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/players:
+    get:
+      tags: [Admin]
+      summary: List all players
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 50 }
+        - in: query
+          name: category
+          schema: { type: string }
+        - in: query
+          name: status
+          schema: { type: string }
+        - in: query
+          name: search
+          schema: { type: string }
+      responses:
+        '200':
+          description: Paginated players
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      players:
+                        type: array
+                        items: { $ref: '#/components/schemas/Player' }
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+        '401':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/players:
+    post:
+      tags: [Admin]
+      summary: Create a player
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [name,category,baseValue]
+              properties:
+                name:      { type: string }
+                category:  { type: string }
+                baseValue: { type: integer }
+                description:{ type: string }
+                position:   { type: string }
+                nationality:{ type: string }
+                age:        { type: integer }
+                rating:     { type: integer }
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Player created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:{ type: boolean }
+                  message:{ type: string }
+                  data:
+                    $ref: '#/components/schemas/Player'
+        '400':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/players/{id}:
+    put:
+      tags: [Admin]
+      summary: Update player
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                name:      { type: string }
+                category:  { type: string }
+                baseValue: { type: integer }
+                description:{ type: string }
+                position:   { type: string }
+                nationality:{ type: string }
+                age:        { type: integer }
+                rating:     { type: integer }
+                isActive:   { type: boolean }
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Player updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:{ type: boolean }
+                  message:{ type: string }
+                  data:
+                    $ref: '#/components/schemas/Player'
+        '404':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/players/{id}:
+    delete:
+      tags: [Admin]
+      summary: Delete player
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Player deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/players/bulk:
+    post:
+      tags: [Admin]
+      summary: Bulk operations on players
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action,playerIds]
+              properties:
+                action:
+                  type: string
+                  enum: [enable,disable,reset,move_category]
+                playerIds:
+                  type: array
+                  items: { type: string }
+                category:
+                  type: string
+      responses:
+        '200':
+          description: Bulk op result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:{ type: boolean }
+                  message:{ type: string }
+                  data:
+                    type: object
+                    properties:
+                      matchedCount: { type: integer }
+                      modifiedCount:{ type: integer }
+        '400':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/auctions:
+    post:
+      tags: [Admin]
+      summary: Create auction
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name,startTime,categories,categoryFlow]
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                startTime:
+                  type: string
+                  format: date-time
+                categories:
+                  type: array
+                  items: { type: string }
+                categoryFlow:
+                  type: array
+                  items: { type: string }
+                mode:
+                  type: string
+                  enum: [auto,manual]
+                timerDuration:
+                  type: integer
+      responses:
+        '201':
+          description: Auction created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:{ type: boolean }
+                  message:{ type: string }
+                  data:
+                    $ref: '#/components/schemas/AuctionSummary'
+        '400':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/settings:
+    get:
+      tags: [Admin]
+      summary: Get application settings
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Settings object
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:{ type: boolean }
+                  data:
+                    $ref: '#/components/schemas/Settings'
+
+    put:
+      tags: [Admin]
+      summary: Update application settings
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Settings'
+      responses:
+        '200':
+          description: Settings updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/broadcasts:
+    get:
+      tags: [Admin]
+      summary: List broadcasts
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20 }
+        - in: query
+          name: status
+          schema: { type: string }
+        - in: query
+          name: type
+          schema: { type: string }
+      responses:
+        '200':
+          description: Paginated broadcasts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:{ type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      broadcasts:
+                        type: array
+                        items: { $ref: '#/components/schemas/Broadcast' }
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+        '401':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/broadcasts:
+    post:
+      tags: [Admin]
+      summary: Create & send broadcast
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title,message]
+              properties:
+                title:
+                  type: string
+                message:
+                  type: string
+                type:
+                  type: string
+                priority:
+                  type: string
+                targetAudience:
+                  type: string
+                targetUsers:
+                  type: array
+                  items: { type: string }
+      responses:
+        '201':
+          description: Broadcast sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:{ type: boolean }
+                  message:{ type: string }
+                  data:
+                    type: object
+                    properties:
+                      broadcast:
+                        $ref: '#/components/schemas/Broadcast'
+                      recipientCount:
+                        type: integer
+        '400':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/broadcasts/{id}:
+    delete:
+      tags: [Admin]
+      summary: Delete broadcast
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Broadcast deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/dashboard:
+    get:
+      tags: [Admin]
+      summary: Get admin dashboard stats
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Overview metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:{ type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      users:
+                        type: object
+                        properties:
+                          total:  { type: integer }
+                          active: { type: integer }
+                          inactive:{ type: integer }
+                      players:
+                        type: object
+                        properties:
+                          total:    { type: integer }
+                          sold:     { type: integer }
+                          available:{ type: integer }
+                      requests:
+                        type: object
+                        properties:
+                          pending: { type: integer }
+                      auctions:
+                        type: object
+                        properties:
+                          ongoing: { type: integer }
+                      broadcasts:
+                        type: object
+                        properties:
+                          total: { type: integer }
+
+  ### STATS ###
+  /stats/leaderboards:
+    get:
+      tags: [Stats]
+      summary: Get leaderboards
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, default: 10 }
+      responses:
+        '200':
+          description: Leaderboards
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:{ type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      topManagersByPoints:
+                        type: array
+                        items: { $ref: '#/components/schemas/User' }
+                      topManagersByWins:
+                        type: array
+                        items: { $ref: '#/components/schemas/User' }
+                      topSpenders:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            _id:         { type: string }
+                            totalSpent:  { type: integer }
+                            playerCount:{ type: integer }
+                      mostExpensivePlayers:
+                        type: array
+                        items: { $ref: '#/components/schemas/Player' }
+        '500':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /stats/overall:
+    get:
+      tags: [Stats]
+      summary: Get overall platform stats
+      responses:
+        '200':
+          description: System statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:{ type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      overview:
+                        type: object
+                        properties:
+                          totalManagers:   { type: integer }
+                          totalPlayers:    { type: integer }
+                          totalAuctions:   { type: integer }
+                          activeAuctions:  { type: integer }
+                          completedAuctions:{ type: integer }
+                      playerStats:
+                        type: object
+                        properties:
+                          byStatus:
+                            type: object
+                            additionalProperties: { type: integer }
+                          sold:
+                            type: object
+                            properties:
+                              totalValue:{ type: integer }
+                              count:     { type: integer }
+                              avgPrice:  { type: integer }
+                              maxPrice:  { type: integer }
+                              minPrice:  { type: integer }
+                      categoryStats:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            _id:   { type: string }
+                            total: { type: integer }
+                            sold:  { type: integer }
+                            unsold:{ type: integer }
+                            available:{ type: integer }
+                      categoryValues:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            _id:       { type: string }
+                            totalValue:{ type: integer }
+                            count:     { type: integer }
+                            avgValue:  { type: number }
+                      auctionActivity:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            _id:
+                              type: object
+                              properties:
+                                year:  { type: integer }
+                                month: { type: integer }
+                            count: { type: integer }
+        '500':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /stats/auction/{auctionId}:
+    get:
+      tags: [Stats]
+      summary: Get stats for a specific auction
+      parameters:
+        - in: path
+          name: auctionId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Auction metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      auction:
+                        $ref: '#/components/schemas/AuctionSummary'
+                      bidStats:
+                        type: object
+                        properties:
+                          totalBids:     { type: integer }
+                          uniqueBidders: { type: integer }
+                          avgBidAmount:  { type: number }
+                      bidderActivity:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            name:     { type: string }
+                            username: { type: string }
+                            bidCount: { type: integer }
+                      soldPlayers:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            name:      { type: string }
+                            category:  { type: string }
+                            baseValue: { type: integer }
+                            soldPrice: { type: integer }
+                            soldTo:
+                              $ref: '#/components/schemas/User'
+                      categoryProgress:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            category:      { type: string }
+                            completed:     { type: integer }
+                            totalValue:    { type: integer }
+        '404':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /stats/manager/{managerId}:
+    get:
+      tags: [Stats]
+      summary: Get stats for a specific manager
+      parameters:
+        - in: path
+          name: managerId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Manager metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      manager:
+                        $ref: '#/components/schemas/User'
+                      spending:
+                        type: object
+                        properties:
+                          totalSpent: { type: integer }
+                          avgSpent:   { type: number }
+                          maxSpent:   { type: integer }
+                          minSpent:   { type: integer }
+                          remainingBalance:{ type: integer }
+                      players:
+                        type: object
+                        properties:
+                          total:            { type: integer }
+                          categoryBreakdown:
+                            type: object
+                            additionalProperties:
+                              type: object
+                              properties:
+                                count:      { type: integer }
+                                totalSpent: { type: integer }
+                                avgSpent:   { type: number }
+                                players:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      name:       { type: string }
+                                      price:      { type: integer }
+                                      baseValue:  { type: integer }
+                      auctionParticipation:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            name:          { type: string }
+                            status:        { type: string }
+                            startTime:
+                              type: string
+                              format: date-time
+                            bidCount:      { type: integer }
+                            totalBidAmount:{ type: integer }
+        '404':
+          $ref: '#/components/schemas/ErrorResponse'

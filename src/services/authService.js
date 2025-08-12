@@ -1,9 +1,9 @@
 // src/services/authService.js
 
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
-const User = require('../models/User');
-const { logger } = require('../utils/logger');
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcrypt';
+import User from '../models/User.js';
+import { logger } from '../utils/logger.js';
 
 class AuthService {
   // Generate JWT token
@@ -20,55 +20,45 @@ class AuthService {
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       const user = await User.findById(decoded.sub);
-
       if (!user || !user.isActive) {
         throw new Error('Invalid token');
       }
-
       return user;
-    } catch (error) {
+    } catch {
       throw new Error('Invalid token');
     }
   }
 
   // Authenticate user
   async authenticate(username, password) {
-    const user = await User.findOne({ 
-      username: username.toLowerCase() 
-    }).select('+password');
-
+    const user = await User.findOne({ username: username.toLowerCase() }).select('+password');
     if (!user) {
       throw new Error('Invalid credentials');
     }
-
     if (!user.isActive) {
       throw new Error('Account is deactivated');
     }
-
-    const isValidPassword = await user.comparePassword(password);
-    if (!isValidPassword) {
+    const isValid = await user.comparePassword(password);
+    if (!isValid) {
       throw new Error('Invalid credentials');
     }
-
-    // Update last login
     user.lastLogin = new Date();
     await user.save();
-
     return user;
   }
 
-  // Hash password
+  // Hash a plain password
   async hashPassword(password) {
     const salt = await bcrypt.genSalt(12);
     return bcrypt.hash(password, salt);
   }
 
-  // Compare password
-  async comparePassword(plainPassword, hashedPassword) {
-    return bcrypt.compare(plainPassword, hashedPassword);
+  // Compare plain vs. hashed
+  async comparePassword(plain, hashed) {
+    return bcrypt.compare(plain, hashed);
   }
 
-  // Generate refresh token
+  // Refresh-token
   generateRefreshToken(userId) {
     return jwt.sign(
       { sub: userId, type: 'refresh' },
@@ -77,28 +67,23 @@ class AuthService {
     );
   }
 
-  // Verify refresh token
   async verifyRefreshToken(token) {
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
       if (decoded.type !== 'refresh') {
         throw new Error('Invalid refresh token');
       }
-
       const user = await User.findById(decoded.sub);
-
       if (!user || !user.isActive) {
         throw new Error('Invalid refresh token');
       }
-
       return user;
-    } catch (error) {
+    } catch {
       throw new Error('Invalid refresh token');
     }
   }
 
-  // Create password reset token
+  // Password reset token
   generatePasswordResetToken(userId) {
     return jwt.sign(
       { sub: userId, type: 'password_reset' },
@@ -107,28 +92,23 @@ class AuthService {
     );
   }
 
-  // Verify password reset token
   async verifyPasswordResetToken(token) {
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
       if (decoded.type !== 'password_reset') {
         throw new Error('Invalid password reset token');
       }
-
       const user = await User.findById(decoded.sub);
-
       if (!user || !user.isActive) {
         throw new Error('Invalid password reset token');
       }
-
       return user;
-    } catch (error) {
+    } catch {
       throw new Error('Invalid password reset token');
     }
   }
 
-  // Validate user permissions
+  // Role checks
   validatePermissions(user, requiredRole) {
     if (requiredRole === 'admin' && user.role !== 'admin') {
       throw new Error('Insufficient permissions');
@@ -136,21 +116,14 @@ class AuthService {
     return true;
   }
 
-  // Check if user can perform action
   canPerformAction(user, action, resourceOwnerId = null) {
-    // Admin can do everything
-    if (user.role === 'admin') {
-      return true;
-    }
-
-    // Users can only modify their own resources
+    if (user.role === 'admin') return true;
+    // user-only ownership
     if (resourceOwnerId && user._id.toString() !== resourceOwnerId.toString()) {
       return false;
     }
-
-    // Define action permissions
     const permissions = {
-      'manager': [
+      manager: [
         'view_profile',
         'update_profile',
         'view_team',
@@ -159,23 +132,18 @@ class AuthService {
         'view_managers',
         'view_stats'
       ],
-      'admin': ['*'] // Admin can do everything
+      admin: ['*']
     };
-
-    const userPermissions = permissions[user.role] || [];
-    return userPermissions.includes('*') || userPermissions.includes(action);
+    const userPerms = permissions[user.role] || [];
+    return userPerms.includes('*') || userPerms.includes(action);
   }
 
-  // Extract token from request
   extractTokenFromRequest(req) {
-    const authHeader = req.header('Authorization');
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      return authHeader.replace('Bearer ', '');
-    }
+    const header = req.header('Authorization');
+    if (header?.startsWith('Bearer ')) return header.replace('Bearer ', '');
     return null;
   }
 
-  // Log security event
   logSecurityEvent(event, userId = null, details = {}) {
     logger.warn('Security Event', {
       event,
@@ -186,4 +154,4 @@ class AuthService {
   }
 }
 
-module.exports = new AuthService();
+export default new AuthService();

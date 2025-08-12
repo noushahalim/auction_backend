@@ -1,6 +1,6 @@
 // src/models/Broadcast.js
 
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const broadcastSchema = new mongoose.Schema({
   title: {
@@ -183,55 +183,39 @@ broadcastSchema.index({ targetAudience: 1 });
 broadcastSchema.index({ sentAt: -1 });
 broadcastSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
-// Virtual for delivery rate
+// Virtuals
 broadcastSchema.virtual('deliveryRate').get(function() {
   if (this.recipientCount === 0) return 0;
   return Math.round((this.deliveredCount / this.recipientCount) * 100);
 });
-
-// Virtual for read rate
 broadcastSchema.virtual('readRate').get(function() {
   if (this.deliveredCount === 0) return 0;
   return Math.round((this.readCount / this.deliveredCount) * 100);
 });
-
-// Virtual for acknowledgment rate
 broadcastSchema.virtual('acknowledgmentRate').get(function() {
   if (!this.requiresAcknowledgment || this.deliveredCount === 0) return null;
   return Math.round((this.acknowledgments.length / this.deliveredCount) * 100);
 });
 
-// Method to send broadcast
+// Instance methods
 broadcastSchema.methods.send = async function() {
-  if (this.status !== 'draft' && this.status !== 'scheduled') {
+  if (!['draft', 'scheduled'].includes(this.status)) {
     throw new Error('Only draft or scheduled broadcasts can be sent');
   }
-  
-  // Get target recipients
   const recipients = await this.getTargetRecipients();
-  
   if (recipients.length === 0) {
     throw new Error('No recipients found for this broadcast');
   }
-  
   this.recipientCount = recipients.length;
   this.status = 'sent';
   this.sentAt = new Date();
-  
   await this.save();
-  
-  // Return recipients for actual delivery by the calling service
-  return {
-    broadcast: this,
-    recipients: recipients
-  };
+  return { broadcast: this, recipients };
 };
 
-// Method to get target recipients
 broadcastSchema.methods.getTargetRecipients = async function() {
-  const User = require('./User');
+  const { default: User } = await import('./User.js');
   let query = {};
-  
   switch (this.targetAudience) {
     case 'all':
       query = { isActive: true };
@@ -243,112 +227,78 @@ broadcastSchema.methods.getTargetRecipients = async function() {
       query = { role: 'admin', isActive: true };
       break;
     case 'active_users':
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-      query = { 
-        isActive: true,
-        lastLogin: { $gte: thirtyDaysAgo }
-      };
+      const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+      query = { isActive: true, lastLogin: { $gte: cutoff } };
       break;
     case 'specific_users':
-      query = { 
-        _id: { $in: this.targetUsers },
-        isActive: true 
-      };
+      query = { _id: { $in: this.targetUsers }, isActive: true };
       break;
   }
-  
   return User.find(query).select('_id name username');
 };
 
-// Method to mark as delivered to user
 broadcastSchema.methods.markDelivered = async function(userId) {
   this.deliveredCount += 1;
   return this.save();
 };
 
-// Method to mark as read by user
 broadcastSchema.methods.markRead = async function(userId) {
   this.readCount += 1;
   return this.save();
 };
 
-// Method to add acknowledgment
 broadcastSchema.methods.addAcknowledgment = async function(userId) {
   if (!this.requiresAcknowledgment) {
     throw new Error('This broadcast does not require acknowledgment');
   }
-  
-  const existingAck = this.acknowledgments.find(ack => ack.userId.equals(userId));
-  if (existingAck) {
-    return this; // Already acknowledged
+  if (this.acknowledgments.some(a => a.userId.equals(userId))) {
+    return this;
   }
-  
-  this.acknowledgments.push({
-    userId: userId,
-    acknowledgedAt: new Date()
-  });
-  
+  this.acknowledgments.push({ userId, acknowledgedAt: new Date() });
   return this.save();
 };
 
-// Method to track failure
 broadcastSchema.methods.trackFailure = async function(userId, reason) {
-  this.failedDeliveries.push({
-    userId: userId,
-    reason: reason,
-    attemptedAt: new Date()
-  });
-  
+  this.failedDeliveries.push({ userId, reason, attemptedAt: new Date() });
   return this.save();
 };
 
-// Method to increment views
 broadcastSchema.methods.incrementViews = async function() {
   this.views += 1;
   return this.save();
 };
 
-// Method to increment clicks
 broadcastSchema.methods.incrementClicks = async function() {
   this.clicks += 1;
   return this.save();
 };
 
-// Method to schedule broadcast
 broadcastSchema.methods.schedule = async function(scheduledFor) {
   if (this.status !== 'draft') {
     throw new Error('Only draft broadcasts can be scheduled');
   }
-  
   this.scheduleType = 'scheduled';
   this.scheduledFor = new Date(scheduledFor);
   this.status = 'scheduled';
-  
   return this.save();
 };
 
-// Method to cancel scheduled broadcast
 broadcastSchema.methods.cancel = async function() {
   if (this.status !== 'scheduled') {
     throw new Error('Only scheduled broadcasts can be cancelled');
   }
-  
   this.status = 'draft';
   this.scheduleType = 'immediate';
   this.scheduledFor = null;
-  
   return this.save();
 };
 
-// Static method to get broadcasts for user
+// Static methods
 broadcastSchema.statics.getForUser = function(userId, limit = 50) {
   return this.find({
     $or: [
       { targetAudience: 'all' },
-      { 
-        targetAudience: 'specific_users',
-        targetUsers: userId
-      }
+      { targetAudience: 'specific_users', targetUsers: userId }
     ],
     status: 'sent',
     $or: [
@@ -361,27 +311,17 @@ broadcastSchema.statics.getForUser = function(userId, limit = 50) {
   .limit(limit);
 };
 
-// Static method to get scheduled broadcasts
 broadcastSchema.statics.getScheduled = function() {
-  return this.find({
-    status: 'scheduled',
-    scheduledFor: { $lte: new Date() }
-  });
+  return this.find({ status: 'scheduled', scheduledFor: { $lte: new Date() } });
 };
 
-// Static method to get broadcast statistics
 broadcastSchema.statics.getStats = function(dateRange = null) {
-  const matchStage = { status: 'sent' };
-  
+  const match = { status: 'sent' };
   if (dateRange) {
-    matchStage.sentAt = {
-      $gte: new Date(dateRange.start),
-      $lte: new Date(dateRange.end)
-    };
+    match.sentAt = { $gte: new Date(dateRange.start), $lte: new Date(dateRange.end) };
   }
-  
   return this.aggregate([
-    { $match: matchStage },
+    { $match: match },
     {
       $group: {
         _id: null,
@@ -405,23 +345,16 @@ broadcastSchema.statics.getStats = function(dateRange = null) {
         averageViews: { $round: ['$averageViews', 2] },
         averageClicks: { $round: ['$averageClicks', 2] },
         deliveryRate: {
-          $round: [
-            { $multiply: [{ $divide: ['$totalDelivered', '$totalRecipients'] }, 100] },
-            2
-          ]
+          $round: [{ $multiply: [{ $divide: ['$totalDelivered', '$totalRecipients'] }, 100] }, 2]
         },
         readRate: {
-          $round: [
-            { $multiply: [{ $divide: ['$totalRead', '$totalDelivered'] }, 100] },
-            2
-          ]
+          $round: [{ $multiply: [{ $divide: ['$totalRead', '$totalDelivered'] }, 100] }, 2]
         }
       }
     }
   ]);
 };
 
-// Static method to create system broadcast
 broadcastSchema.statics.createSystemBroadcast = async function(template, data = {}) {
   const templates = {
     auction_start: {
@@ -429,10 +362,7 @@ broadcastSchema.statics.createSystemBroadcast = async function(template, data = 
       message: `Auction "${data.auctionName}" has started. Join now to participate!`,
       type: 'auction',
       priority: 'high',
-      actionButton: {
-        text: 'Join Auction',
-        action: 'auction_join'
-      }
+      actionButton: { text: 'Join Auction', action: 'auction_join' }
     },
     auction_end: {
       title: 'Auction Completed',
@@ -461,11 +391,8 @@ broadcastSchema.statics.createSystemBroadcast = async function(template, data = 
       priority: 'urgent'
     }
   };
-  
   const templateData = templates[template];
-  if (!templateData) {
-    throw new Error(`Unknown system template: ${template}`);
-  }
+  if (!templateData) throw new Error(`Unknown system template: ${template}`);
   
   const broadcastData = {
     ...templateData,
@@ -475,17 +402,15 @@ broadcastSchema.statics.createSystemBroadcast = async function(template, data = 
     systemTemplate: template,
     relatedAuction: data.auctionId || null,
     relatedPlayer: data.playerId || null,
-    ...data.overrides || {}
+    ...data.overrides
   };
   
   const broadcast = new this(broadcastData);
   await broadcast.save();
-  
-  if (broadcastData.scheduleType !== 'scheduled') {
+  if (broadcast.scheduleType !== 'scheduled') {
     await broadcast.send();
   }
-  
   return broadcast;
 };
 
-module.exports = mongoose.model('Broadcast', broadcastSchema);
+export default mongoose.model('Broadcast', broadcastSchema);

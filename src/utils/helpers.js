@@ -1,17 +1,14 @@
 // src/utils/helpers.js
-
-// Common utility functions used throughout the application
-
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
-import logger from './logger.js';
+import { logger } from './logger.js';
 
 /**
  * Generate JWT token
  */
 export const generateToken = (payload, expiresIn = '24h') => {
   try {
-    return jwt.sign(payload, process.env.JWT_SECRET, { 
+    return jwt.sign(payload, process.env.JWT_SECRET, {
       expiresIn,
       issuer: 'auction-platform',
       audience: 'auction-users'
@@ -44,21 +41,17 @@ export const verifyToken = (token) => {
 /**
  * Generate correlation ID for request tracking
  */
-export const generateCorrelationId = () => {
-  return uuidv4();
-};
+export const generateCorrelationId = () => uuidv4();
 
 /**
  * Format currency amount
  */
 export const formatCurrency = (amount, currency = 'credits') => {
   if (typeof amount !== 'number') return '0';
-  
   const formatted = new Intl.NumberFormat('en-US', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0
   }).format(amount);
-  
   return `${formatted} ${currency}`;
 };
 
@@ -67,84 +60,57 @@ export const formatCurrency = (amount, currency = 'credits') => {
  */
 export const formatNumber = (num) => {
   if (typeof num !== 'number') return '0';
-  
-  const absNum = Math.abs(num);
-  const sign = num < 0 ? '-' : '';
-  
-  if (absNum >= 1e9) {
-    return sign + (absNum / 1e9).toFixed(1) + 'B';
-  } else if (absNum >= 1e6) {
-    return sign + (absNum / 1e6).toFixed(1) + 'M';
-  } else if (absNum >= 1e3) {
-    return sign + (absNum / 1e3).toFixed(1) + 'K';
-  }
-  
-  return sign + absNum.toString();
+  const abs = Math.abs(num), sign = num < 0 ? '-' : '';
+  if (abs >= 1e9)   return sign + (abs/1e9).toFixed(1) + 'B';
+  if (abs >= 1e6)   return sign + (abs/1e6).toFixed(1) + 'M';
+  if (abs >= 1e3)   return sign + (abs/1e3).toFixed(1) + 'K';
+  return sign + abs.toString();
 };
 
 /**
  * Validate email format
  */
-export const isValidEmail = (email) => {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email);
-};
+export const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
 /**
  * Validate username format
  */
-export const isValidUsername = (username) => {
-  // Username should be 3-20 characters, alphanumeric and underscore only
-  const usernameRegex = /^[a-zA-Z0-9_]{3,20}$/;
-  return usernameRegex.test(username);
-};
+export const isValidUsername = (username) =>
+  /^[a-zA-Z0-9_]{3,20}$/.test(username);
 
 /**
  * Validate password strength
  */
-export const isValidPassword = (password) => {
-  // At least 8 characters, one uppercase, one lowercase, one number
-  return password.length >= 8;
-};
+export const isValidPassword = (password) => password.length >= 8;
 
 /**
  * Sanitize user input
  */
 export const sanitizeInput = (input) => {
   if (typeof input !== 'string') return input;
-  
-  return input
-    .trim()
-    .replace(/[<>]/g, '') // Remove potential HTML tags
-    .slice(0, 1000); // Limit length
+  return input.trim().replace(/[<>]/g, '').slice(0, 1000);
 };
 
 /**
  * Calculate time remaining in seconds
  */
 export const getTimeRemaining = (endTime) => {
-  const now = new Date().getTime();
-  const end = new Date(endTime).getTime();
-  const remaining = Math.max(0, Math.floor((end - now) / 1000));
-  
-  return remaining;
+  const now = Date.now(), end = new Date(endTime).getTime();
+  return Math.max(0, Math.floor((end - now)/1000));
 };
 
 /**
  * Format time duration
  */
 export const formatDuration = (seconds) => {
-  if (seconds < 60) {
-    return `${seconds}s`;
-  } else if (seconds < 3600) {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return remainingSeconds > 0 ? `${minutes}m ${remainingSeconds}s` : `${minutes}m`;
-  } else {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) {
+    const m = Math.floor(seconds/60), s = seconds%60;
+    return s>0 ? `${m}m ${s}s` : `${m}m`;
   }
+  const h = Math.floor(seconds/3600),
+        m = Math.floor((seconds%3600)/60);
+  return m>0 ? `${h}h ${m}m` : `${h}h`;
 };
 
 /**
@@ -152,13 +118,11 @@ export const formatDuration = (seconds) => {
  */
 export const generateRandomString = (length = 8) => {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let result = '';
-  
-  for (let i = 0; i < length; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  let s = '';
+  for (let i=0; i<length; i++) {
+    s += chars.charAt(Math.floor(Math.random()*chars.length));
   }
-  
-  return result;
+  return s;
 };
 
 /**
@@ -166,16 +130,12 @@ export const generateRandomString = (length = 8) => {
  */
 export const deepClone = (obj) => {
   if (obj === null || typeof obj !== 'object') return obj;
-  if (obj instanceof Date) return new Date(obj.getTime());
-  if (obj instanceof Array) return obj.map(item => deepClone(item));
-  
+  if (obj instanceof Date) return new Date(obj);
+  if (Array.isArray(obj)) return obj.map(deepClone);
   const cloned = {};
-  for (const key in obj) {
-    if (obj.hasOwnProperty(key)) {
-      cloned[key] = deepClone(obj[key]);
-    }
+  for (const k in obj) {
+    if (Object.hasOwn(obj, k)) cloned[k] = deepClone(obj[k]);
   }
-  
   return cloned;
 };
 
@@ -184,17 +144,13 @@ export const deepClone = (obj) => {
  */
 export const deepMerge = (target, source) => {
   const result = { ...target };
-  
-  for (const key in source) {
-    if (source.hasOwnProperty(key)) {
-      if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
-        result[key] = deepMerge(result[key] || {}, source[key]);
-      } else {
-        result[key] = source[key];
-      }
+  for (const k in source) {
+    if (source[k] && typeof source[k] === 'object' && !Array.isArray(source[k])) {
+      result[k] = deepMerge(result[k] || {}, source[k]);
+    } else {
+      result[k] = source[k];
     }
   }
-  
   return result;
 };
 
@@ -203,15 +159,9 @@ export const deepMerge = (target, source) => {
  */
 export const debounce = (func, wait) => {
   let timeout;
-  
-  return function executedFunction(...args) {
-    const later = () => {
-      clearTimeout(timeout);
-      func(...args);
-    };
-    
+  return (...args) => {
     clearTimeout(timeout);
-    timeout = setTimeout(later, wait);
+    timeout = setTimeout(() => func(...args), wait);
   };
 };
 
@@ -220,10 +170,9 @@ export const debounce = (func, wait) => {
  */
 export const throttle = (func, limit) => {
   let inThrottle;
-  
-  return function(...args) {
+  return (...args) => {
     if (!inThrottle) {
-      func.apply(this, args);
+      func(...args);
       inThrottle = true;
       setTimeout(() => inThrottle = false, limit);
     }
@@ -233,43 +182,35 @@ export const throttle = (func, limit) => {
 /**
  * Sleep function for delays
  */
-export const sleep = (ms) => {
-  return new Promise(resolve => setTimeout(resolve, ms));
-};
+export const sleep = (ms) => new Promise(res => setTimeout(res, ms));
 
 /**
  * Retry function with exponential backoff
  */
 export const retry = async (fn, maxAttempts = 3, baseDelay = 1000) => {
   let lastError;
-  
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      return await fn();
-    } catch (error) {
-      lastError = error;
-      
-      if (attempt === maxAttempts) {
-        break;
+  for (let i=1; i<=maxAttempts; i++) {
+    try { return await fn(); }
+    catch (err) {
+      lastError = err;
+      if (i < maxAttempts) {
+        const delay = baseDelay * 2**(i-1);
+        logger.warn(`Attempt ${i} failed, retrying in ${delay}ms:`, err.message);
+        await sleep(delay);
       }
-      
-      const delay = baseDelay * Math.pow(2, attempt - 1);
-      logger.warn(`Attempt ${attempt} failed, retrying in ${delay}ms:`, error.message);
-      await sleep(delay);
     }
   }
-  
   throw lastError;
 };
 
 /**
  * Check if value is empty
  */
-export const isEmpty = (value) => {
-  if (value == null) return true;
-  if (typeof value === 'string') return value.trim().length === 0;
-  if (Array.isArray(value)) return value.length === 0;
-  if (typeof value === 'object') return Object.keys(value).length === 0;
+export const isEmpty = (v) => {
+  if (v == null) return true;
+  if (typeof v === 'string') return v.trim().length===0;
+  if (Array.isArray(v)) return v.length===0;
+  if (typeof v === 'object') return Object.keys(v).length===0;
   return false;
 };
 
@@ -277,84 +218,65 @@ export const isEmpty = (value) => {
  * Get client IP address
  */
 export const getClientIp = (req) => {
-  return req.ip ||
-         req.connection.remoteAddress ||
-         req.socket.remoteAddress ||
-         (req.connection.socket ? req.connection.socket.remoteAddress : null) ||
-         req.headers['x-forwarded-for']?.split(',')[0].trim() ||
-         req.headers['x-real-ip'] ||
-         '127.0.0.1';
+  return (
+    req.ip ||
+    req.headers['x-forwarded-for']?.split(',')[0].trim() ||
+    req.connection?.remoteAddress ||
+    req.socket?.remoteAddress ||
+    '127.0.0.1'
+  );
 };
 
 /**
  * Calculate percentage
  */
-export const calculatePercentage = (part, total) => {
-  if (total === 0) return 0;
-  return Math.round((part / total) * 100 * 100) / 100; // Round to 2 decimal places
-};
+export const calculatePercentage = (part, total) =>
+  total===0 ? 0 : Math.round((part/total)*10000)/100;
 
 /**
  * Generate slug from text
  */
-export const generateSlug = (text) => {
-  return text
+export const generateSlug = (text) =>
+  text
     .toLowerCase()
     .trim()
-    .replace(/[^\w\s-]/g, '') // Remove special characters
-    .replace(/[\s_-]+/g, '-') // Replace spaces and underscores with hyphens
-    .replace(/^-+|-+$/g, ''); // Remove leading/trailing hyphens
-};
+    .replace(/[^\w\s-]/g, '')
+    .replace(/[\s_-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 
 /**
  * Parse sort string for MongoDB
  */
 export const parseSort = (sortString) => {
   if (!sortString) return {};
-  
-  const sortObj = {};
-  const parts = sortString.split(',');
-  
-  parts.forEach(part => {
-    const trimmed = part.trim();
-    if (trimmed.startsWith('-')) {
-      sortObj[trimmed.substring(1)] = -1;
-    } else {
-      sortObj[trimmed] = 1;
-    }
-  });
-  
-  return sortObj;
+  return sortString.split(',').reduce((acc, part) => {
+    const t = part.trim();
+    acc[t.startsWith('-') ? t.slice(1) : t] = t.startsWith('-') ? -1 : 1;
+    return acc;
+  }, {});
 };
 
 /**
  * Create response object
  */
 export const createResponse = (success = true, data = null, message = '', error = null) => {
-  const response = { success };
-  
-  if (data !== null) response.data = data;
-  if (message) response.message = message;
-  if (error) response.error = error;
-  
-  return response;
+  const r = { success };
+  if (data  !== null) r.data    = data;
+  if (message)      r.message = message;
+  if (error)        r.error   = error;
+  return r;
 };
 
 /**
  * Mask sensitive information
  */
-export const maskSensitiveData = (obj, fields = ['password', 'token', 'secret']) => {
-  const masked = { ...obj };
-  
-  fields.forEach(field => {
-    if (masked[field]) {
-      masked[field] = '***MASKED***';
-    }
-  });
-  
-  return masked;
+export const maskSensitiveData = (obj, fields = ['password','token','secret']) => {
+  const m = { ...obj };
+  fields.forEach(f => { if (m[f]) m[f] = '***MASKED***'; });
+  return m;
 };
 
+// Export default bundle
 export default {
   generateToken,
   verifyToken,

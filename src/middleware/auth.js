@@ -1,14 +1,14 @@
 // src/middleware/auth.js
 
-const jwt = require('jsonwebtoken');
-const User = require('../models/User');
-const { logger } = require('../utils/logger');
+import jwt from 'jsonwebtoken';
+import User from '../models/User.js';
+import { logger } from '../utils/logger.js';
 
 // Main authentication middleware
-const auth = async (req, res, next) => {
+export const auth = async (req, res, next) => {
   try {
     let token = req.headers.authorization;
-    
+
     if (!token) {
       return res.status(401).json({
         success: false,
@@ -23,10 +23,10 @@ const auth = async (req, res, next) => {
 
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
+
     // Get user from database
     const user = await User.findById(decoded.sub).select('-password');
-    
+
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -70,7 +70,7 @@ const auth = async (req, res, next) => {
 };
 
 // Admin authentication middleware
-const adminAuth = async (req, res, next) => {
+export const adminAuth = async (req, res, next) => {
   try {
     if (!req.user) {
       return res.status(401).json({
@@ -98,7 +98,7 @@ const adminAuth = async (req, res, next) => {
 };
 
 // Require active user middleware
-const requireActiveUser = async (req, res, next) => {
+export const requireActiveUser = async (req, res, next) => {
   try {
     if (!req.user) {
       return res.status(401).json({
@@ -126,10 +126,10 @@ const requireActiveUser = async (req, res, next) => {
 };
 
 // Optional authentication (for public endpoints that can benefit from user context)
-const optionalAuth = async (req, res, next) => {
+export const optionalAuth = async (req, res, next) => {
   try {
     let token = req.headers.authorization;
-    
+
     if (!token) {
       return next(); // Continue without user context
     }
@@ -140,7 +140,7 @@ const optionalAuth = async (req, res, next) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.sub).select('-password');
-    
+
     if (user && user.isActive) {
       req.user = user;
     }
@@ -154,7 +154,7 @@ const optionalAuth = async (req, res, next) => {
 };
 
 // Rate limiting for specific actions
-const actionRateLimit = (maxAttempts, windowMs) => {
+export const actionRateLimit = (maxAttempts, windowMs) => {
   const attempts = new Map();
 
   return (req, res, next) => {
@@ -170,7 +170,7 @@ const actionRateLimit = (maxAttempts, windowMs) => {
     }
 
     const userAttempts = attempts.get(key);
-    
+
     if (userAttempts && userAttempts.count >= maxAttempts) {
       const timeLeft = Math.ceil((userAttempts.timestamp + windowMs - now) / 1000);
       return res.status(429).json({
@@ -191,7 +191,7 @@ const actionRateLimit = (maxAttempts, windowMs) => {
 };
 
 // Check if user can perform auction actions
-const canParticipateInAuction = async (req, res, next) => {
+export const canParticipateInAuction = async (req, res, next) => {
   try {
     if (!req.user) {
       return res.status(401).json({
@@ -226,10 +226,10 @@ const canParticipateInAuction = async (req, res, next) => {
 };
 
 // Socket authentication middleware
-const authenticateSocket = (socket, next) => {
+export const authenticateSocket = (socket, next) => {
   try {
     const token = socket.handshake.auth.token || socket.handshake.headers.authorization;
-    
+
     if (!token) {
       return next(new Error('Authentication token required'));
     }
@@ -244,7 +244,7 @@ const authenticateSocket = (socket, next) => {
 
       try {
         const user = await User.findById(decoded.sub).select('-password');
-        
+
         if (!user || !user.isActive) {
           return next(new Error('Invalid or inactive user'));
         }
@@ -264,7 +264,7 @@ const authenticateSocket = (socket, next) => {
 };
 
 // Middleware to log authenticated requests
-const logAuthenticatedRequest = (req, res, next) => {
+export const logAuthenticatedRequest = (req, res, next) => {
   if (req.user) {
     logger.info(`Authenticated request: ${req.method} ${req.path} by ${req.user.username} (${req.user._id})`);
   }
@@ -272,7 +272,7 @@ const logAuthenticatedRequest = (req, res, next) => {
 };
 
 // Check if user has permission for specific resource
-const checkResourcePermission = (resourceType) => {
+export const checkResourcePermission = (resourceType) => {
   return async (req, res, next) => {
     try {
       const userId = req.user._id;
@@ -297,7 +297,7 @@ const checkResourcePermission = (resourceType) => {
 
         case 'team':
           // Check if user owns the team/players
-          const Player = require('../models/Player');
+          const { default: Player } = await import('../models/Player.js');
           const player = await Player.findById(resourceId);
           if (player && player.soldTo && !player.soldTo.equals(userId)) {
             return res.status(403).json({
@@ -324,7 +324,8 @@ const checkResourcePermission = (resourceType) => {
   };
 };
 
-module.exports = {
+// Default export with all middleware
+export default {
   auth,
   adminAuth,
   requireActiveUser,

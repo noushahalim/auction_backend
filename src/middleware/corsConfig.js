@@ -1,64 +1,105 @@
 // src/middleware/corsConfig.js
 
-// Provides secure cross-origin resource sharing settings
-
 import cors from 'cors';
-import { config } from '../config/database.js';
 
-const corsConfig = cors({
+// CORS configuration
+const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (mobile apps, Postman, etc.)
+    // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    
-    // Define allowed origins based on environment
-    const allowedOrigins = process.env.NODE_ENV === 'production' 
-      ? [
-          process.env.CLIENT_URL,
-          process.env.ADMIN_URL,
-          'https://your-production-domain.com',
-          'https://your-admin-panel.com'
-        ].filter(Boolean)
-      : [
-          'http://localhost:3000',
-          'http://localhost:4200', // Angular dev server
-          'http://127.0.0.1:3000',
-          'http://127.0.0.1:4200',
-          'http://localhost:8080'
-        ];
 
-    if (allowedOrigins.includes(origin)) {
+    // List of allowed origins
+    const allowedOrigins = [
+      process.env.CLIENT_URL || 'http://localhost:4200',
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://127.0.0.1:4200',
+      'http://127.0.0.1:3000'
+    ];
+
+    // Add additional origins from environment variable
+    if (process.env.ADDITIONAL_ORIGINS) {
+      const additionalOrigins = process.env.ADDITIONAL_ORIGINS.split(',');
+      allowedOrigins.push(...additionalOrigins);
+    }
+
+    if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS policy'));
+      callback(new Error('Not allowed by CORS'));
     }
   },
-  
-  credentials: true, // Allow cookies and authentication headers
-  
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  
   allowedHeaders: [
-    'Origin',
-    'X-Requested-With',
     'Content-Type',
-    'Accept',
     'Authorization',
-    'X-Access-Token',
-    'X-Correlation-ID'
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+    'X-Refresh-Token',
+    'X-Request-ID'
   ],
-  
-  exposedHeaders: [
-    'X-Total-Count',
-    'X-Page-Count', 
-    'X-Correlation-ID'
-  ],
-  
-  // Cache preflight requests for 24 hours
-  maxAge: 86400,
-  
-  // Handle preflight requests
+  credentials: true,
   preflightContinue: false,
-  optionsSuccessStatus: 204
-});
+  optionsSuccessStatus: 200,
+  maxAge: 86400 // 24 hours
+};
 
-export default corsConfig;
+// Development CORS (less restrictive)
+const devCorsOptions = {
+  origin: true, // Allow all origins in development
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+    'X-Refresh-Token',
+    'X-Request-ID'
+  ],
+  credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 200
+};
+
+// Choose configuration based on environment
+const corsConfig = process.env.NODE_ENV === 'development' ? devCorsOptions : corsOptions;
+
+// Create CORS middleware
+const corsMiddleware = cors(corsConfig);
+
+// Socket.IO CORS configuration
+export const socketCorsOptions = {
+  origin: corsConfig.origin,
+  methods: corsConfig.methods,
+  credentials: corsConfig.credentials
+};
+
+// API-specific CORS configuration
+export const apiCorsOptions = {
+  ...corsConfig,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  allowedHeaders: [
+    ...corsConfig.allowedHeaders,
+    'X-API-Key',
+    'X-Client-Version'
+  ]
+};
+
+// WebSocket CORS configuration
+export const wsCorsOptions = {
+  origin: corsConfig.origin,
+  credentials: corsConfig.credentials
+};
+
+// Export default CORS middleware
+export default corsMiddleware;
+
+// Export named configurations
+export {
+  corsOptions,
+  devCorsOptions,
+  corsConfig,
+  corsMiddleware
+};

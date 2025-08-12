@@ -1,8 +1,8 @@
 // src/middleware/upload.js
 
-const multer = require('multer');
-const imageService = require('../services/imageService');
-const { logger } = require('../utils/logger');
+import multer from 'multer';
+import imageService from '../services/imageService.js';
+import { logger } from '../utils/logger.js';
 
 // Configure multer for memory storage
 const storage = multer.memoryStorage();
@@ -23,28 +23,27 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-// Configure multer
+// Configure multer for single and multiple uploads
 const upload = multer({
-  storage: storage,
+  storage,
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB limit
     files: 1 // Single file upload
   },
-  fileFilter: fileFilter
+  fileFilter
 });
 
-// Configure multer for multiple files
 const multipleUpload = multer({
-  storage: storage,
+  storage,
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB per file
     files: 5 // Maximum 5 files
   },
-  fileFilter: fileFilter
+  fileFilter
 });
 
 // Single file upload middleware
-const uploadSingle = (fieldName = 'image') => {
+export const uploadSingle = (fieldName = 'image') => {
   return (req, res, next) => {
     const singleUpload = upload.single(fieldName);
 
@@ -90,7 +89,7 @@ const uploadSingle = (fieldName = 'image') => {
 };
 
 // Multiple files upload middleware
-const uploadMultiple = (fieldName = 'images', maxCount = 5) => {
+export const uploadMultiple = (fieldName = 'images', maxCount = 5) => {
   return (req, res, next) => {
     const arrayUpload = multipleUpload.array(fieldName, maxCount);
 
@@ -138,7 +137,7 @@ const uploadMultiple = (fieldName = 'images', maxCount = 5) => {
 };
 
 // Avatar upload middleware with additional validation
-const uploadAvatar = (req, res, next) => {
+export const uploadAvatar = (req, res, next) => {
   const singleUpload = upload.single('avatar');
 
   singleUpload(req, res, (err) => {
@@ -182,7 +181,7 @@ const uploadAvatar = (req, res, next) => {
 };
 
 // Player image upload middleware
-const uploadPlayerImage = (req, res, next) => {
+export const uploadPlayerImage = (req, res, next) => {
   const singleUpload = upload.single('playerImage');
 
   singleUpload(req, res, (err) => {
@@ -211,53 +210,33 @@ const uploadPlayerImage = (req, res, next) => {
 };
 
 // Error handling middleware specifically for multer
-const handleMulterError = (err, req, res, next) => {
+export const handleMulterError = (err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     logger.error('Multer error:', err.message);
 
     switch (err.code) {
       case 'LIMIT_FILE_SIZE':
-        return res.status(400).json({
-          success: false,
-          error: 'File too large'
-        });
+        return res.status(400).json({ success: false, error: 'File too large' });
       case 'LIMIT_FILE_COUNT':
-        return res.status(400).json({
-          success: false,
-          error: 'Too many files'
-        });
+        return res.status(400).json({ success: false, error: 'Too many files' });
       case 'LIMIT_FIELD_KEY':
-        return res.status(400).json({
-          success: false,
-          error: 'Field name too long'
-        });
+        return res.status(400).json({ success: false, error: 'Field name too long' });
       case 'LIMIT_FIELD_VALUE':
-        return res.status(400).json({
-          success: false,
-          error: 'Field value too long'
-        });
+        return res.status(400).json({ success: false, error: 'Field value too long' });
       case 'LIMIT_FIELD_COUNT':
-        return res.status(400).json({
-          success: false,
-          error: 'Too many fields'
-        });
+        return res.status(400).json({ success: false, error: 'Too many fields' });
       case 'LIMIT_UNEXPECTED_FILE':
-        return res.status(400).json({
-          success: false,
-          error: 'Unexpected field'
-        });
+        return res.status(400).json({ success: false, error: 'Unexpected field' });
       default:
-        return res.status(400).json({
-          success: false,
-          error: 'File upload error'
-        });
+        return res.status(400).json({ success: false, error: 'File upload error' });
     }
   }
 
   next(err);
 };
 
-module.exports = {
+// Export all methods
+export default {
   uploadSingle,
   uploadMultiple,
   uploadAvatar,
